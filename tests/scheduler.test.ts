@@ -28,7 +28,9 @@ describe('spaced repetition schedule', () => {
     const mature = { ...initialReview(now), interval: 30, repetitions: 5 };
     expect(scheduleReview(mature, 'hard', now).interval).toBe(36);
     expect(scheduleReview(mature, 'easy', now).interval).toBe(98);
-    expect(scheduleReview({ ...mature, interval: 3650, ease: 3.5 }, 'easy', now).interval).toBe(3650);
+    expect(scheduleReview({ ...mature, interval: 3650, ease: 3.5 }, 'easy', now).interval).toBe(
+      3650,
+    );
     expect(() => scheduleReview(mature, 'unknown' as Rating, now)).toThrow();
   });
   it('does not shorten the interval after an easy card is later recalled correctly', () => {

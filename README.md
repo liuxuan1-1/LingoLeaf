@@ -16,7 +16,9 @@
 
 ## 获取与开发
 
-首次发布：**v0.1.0 预览版**。请从本仓库的 Releases 下载 Windows x64 免安装程序，启动后先配置自己的模型接口。
+首次发布：**v0.1.0 预览版**。从 [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases) 下载 Windows x64 免安装程序，启动后先配置自己的模型接口。
+
+[![Windows checks](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml)
 
 Windows 10 / 11，x64。原生桥使用系统自带的 Windows PowerShell 5.1、.NET Framework 和 UI Automation，无需另装 .NET SDK。桌面框架为 Electron，界面为 React + TypeScript。
 
