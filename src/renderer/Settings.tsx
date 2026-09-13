@@ -16,7 +16,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Provider, Settings } from '../shared/types';
+import type { Provider, RequestProtocol, Settings } from '../shared/types';
 import { api, errorMessage } from './bridge';
 import { SectionHeading, Shortcut, Spinner, Toggle, type Notify } from './components';
 
@@ -177,7 +177,11 @@ export function SettingsPage({
   const field = <K extends keyof Settings>(key: K, value: Settings[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
     setDirty(true);
-    if (['provider', 'endpoint', 'model', 'apiKey', 'azureApiVersion'].includes(key))
+    if (
+      ['provider', 'endpoint', 'model', 'apiKey', 'azureApiVersion', 'requestProtocol'].includes(
+        key,
+      )
+    )
       setTestResult(null);
   };
   const changeProvider = (provider: Provider) => {
@@ -185,6 +189,7 @@ export function SettingsPage({
     setDraft((current) => ({
       ...current,
       provider,
+      requestProtocol: 'auto',
       endpoint: defaults.endpoint,
       model: defaults.model,
       apiKey: '',
@@ -286,10 +291,29 @@ export function SettingsPage({
                     : draft.provider === 'ollama'
                       ? '本机 Ollama 通常使用 http://localhost:11434。请先拉取并启动所选模型。'
                       : draft.provider === 'compatible'
-                        ? '支持 LM Studio、vLLM 等 OpenAI Chat Completions 兼容接口。'
+                        ? '支持 OpenAI Chat Completions 和 Responses 接口，包括 LM Studio、vLLM、Copilot Bridge。'
                         : '可使用官方接口或你信任的代理地址。'}
                 </small>
               </label>
+              {(draft.provider === 'openai' || draft.provider === 'compatible') && (
+                <label className="form-field full">
+                  <span>
+                    请求协议 <small>API protocol</small>
+                  </span>
+                  <select
+                    value={draft.requestProtocol ?? 'auto'}
+                    onChange={(e) => field('requestProtocol', e.target.value as RequestProtocol)}
+                  >
+                    <option value="auto">自动识别（推荐）</option>
+                    <option value="chat-completions">Chat Completions</option>
+                    <option value="responses">Responses API</option>
+                  </select>
+                  <small>
+                    Copilot Bridge 的 /codex 地址使用
+                    Responses。自动模式会识别完整接口路径，并在路由不存在时尝试另一种协议。
+                  </small>
+                </label>
+              )}
               <label className={`form-field ${draft.provider !== 'azure' ? 'full' : ''}`}>
                 <span>
                   {draft.provider === 'azure' ? '部署名称' : '模型名称'}{' '}

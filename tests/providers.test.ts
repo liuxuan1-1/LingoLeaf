@@ -9,6 +9,15 @@ let baseUrl: string;
 let status = 200;
 let payload: unknown;
 let rawBody: string | undefined;
+interface Reply {
+  status?: number;
+  payload?: unknown;
+  raw?: string;
+  contentType?: string;
+  chunks?: Buffer[];
+  keepOpen?: boolean;
+}
+let replies: Reply[] = [];
 let captured: {
   url: string;
   headers: Record<string, string | string[] | undefined>;
@@ -38,6 +47,22 @@ const incorrect = {
 const envelope = (value: unknown) => ({
   choices: [{ message: { content: JSON.stringify(value) } }],
 });
+const responsesEnvelope = (value: unknown) => ({
+  id: 'resp_test',
+  object: 'response',
+  status: 'completed',
+  output: [
+    {
+      id: 'msg_test',
+      type: 'message',
+      role: 'assistant',
+      status: 'completed',
+      content: [{ type: 'output_text', text: JSON.stringify(value), annotations: [] }],
+    },
+  ],
+});
+const sseEvent = (type: string, fields: Record<string, unknown> = {}) =>
+  `event: ${type}\ndata: ${JSON.stringify({ type, ...fields })}\n\n`;
 const config = (provider: Provider = 'openai'): Settings => ({
   ...DEFAULT_SETTINGS,
   provider,
@@ -51,16 +76,27 @@ beforeAll(async () => {
     let body = '';
     for await (const chunk of request) body += chunk;
     captured.push({ url: request.url || '', headers: request.headers, body: JSON.parse(body) });
-    response.writeHead(status, {
-      'Content-Type': 'application/json',
-      ...(status === 302 ? { Location: 'https://example.com/stolen' } : {}),
+    const reply = replies.shift();
+    const replyStatus = reply?.status ?? status;
+    response.writeHead(replyStatus, {
+      'Content-Type': reply?.contentType ?? 'application/json',
+      ...(replyStatus === 302 ? { Location: 'https://example.com/stolen' } : {}),
     });
-    response.end(rawBody ?? JSON.stringify(payload));
+    if (reply?.chunks) {
+      response.flushHeaders();
+      for (const chunk of reply.chunks) {
+        if (response.destroyed) break;
+        response.write(chunk);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      if (!reply.keepOpen) response.end();
+    } else response.end(reply?.raw ?? rawBody ?? JSON.stringify(reply?.payload ?? payload));
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
 });
 afterAll(async () => {
+  server.closeAllConnections();
   await new Promise<void>((resolve, reject) =>
     server.close((error) => (error ? reject(error) : resolve())),
   );
@@ -69,6 +105,7 @@ beforeEach(() => {
   status = 200;
   payload = envelope(incorrect);
   rawBody = undefined;
+  replies = [];
   captured = [];
 });
 afterEach(() => {
@@ -252,5 +289,312 @@ describe('provider validation and safe errors', () => {
     const expectation = expect(pending).rejects.toThrow('60 秒');
     await vi.advanceTimersByTimeAsync(60_000);
     await expectation;
+  });
+});
+
+describe('Responses protocol routing', () => {
+  it('sends official Responses instructions/input and accepts a completed JSON response', async () => {
+    payload = responsesEnvelope(incorrect);
+    const result = await analyzeText('She go to school every day.', 'grammar', {
+      ...config(),
+      requestProtocol: 'responses',
+    });
+    expect(result.corrected).toBe(incorrect.corrected);
+    const request = captured[0];
+    expect(request.url).toBe('/v1/responses');
+    expect(request.headers.authorization).toBe('Bearer fake-secret-test-key');
+    expect(request.body.instructions).toContain('language teacher');
+    expect(request.body.input).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: JSON.stringify({ text: 'She go to school every day.' }) },
+        ],
+      },
+    ]);
+    expect(request.body).toMatchObject({
+      stream: true,
+      store: false,
+      max_output_tokens: 4096,
+      text: { format: { type: 'json_object' } },
+    });
+    expect(request.body.messages).toBeUndefined();
+    expect(request.body.response_format).toBeUndefined();
+    expect(request.body.max_completion_tokens).toBeUndefined();
+  });
+  it('preserves the Codex base path/model and omits optional fields for compatible Responses', async () => {
+    payload = responsesEnvelope(good);
+    await analyzeText(good.corrected, 'grammar', {
+      ...config('compatible'),
+      endpoint: `${baseUrl}/codex`,
+      model: 'gpt-6-astra',
+      requestProtocol: 'responses',
+    });
+    expect(captured[0].url).toBe('/codex/responses');
+    expect(captured[0].body).toMatchObject({ model: 'gpt-6-astra', stream: true, store: false });
+    expect(captured[0].body.max_output_tokens).toBeUndefined();
+    expect(captured[0].body.text).toBeUndefined();
+    expect(captured).toHaveLength(1);
+  });
+  it.each(['/codex/responses', '/codex/responses/', '/responses'])(
+    'recognizes an explicit Responses endpoint in auto mode: %s',
+    async (suffix) => {
+      payload = responsesEnvelope(good);
+      await analyzeText(good.corrected, 'grammar', {
+        ...config('compatible'),
+        endpoint: baseUrl + suffix,
+      });
+      expect(captured[0].url).toBe(suffix.replace(/\/$/, ''));
+      expect(captured[0].body.input).toBeDefined();
+      expect(captured).toHaveLength(1);
+    },
+  );
+  it.each([404, 405])(
+    'tries Responses only once after auto Chat Completions HTTP %i',
+    async (code) => {
+      replies = [
+        { status: code, payload: { error: 'route unavailable' } },
+        { payload: responsesEnvelope(good) },
+      ];
+      await analyzeText(good.corrected, 'grammar', {
+        ...config('compatible'),
+        endpoint: `${baseUrl}/codex?revision=abc`,
+        requestProtocol: 'auto',
+      });
+      expect(captured.map((request) => request.url)).toEqual([
+        '/codex/chat/completions?revision=abc',
+        '/codex/responses?revision=abc',
+      ]);
+      expect(captured.map((request) => request.headers.authorization)).toEqual([
+        'Bearer fake-secret-test-key',
+        'Bearer fake-secret-test-key',
+      ]);
+      expect(captured[0].body.messages).toBeDefined();
+      expect(captured[1].body.input).toBeDefined();
+    },
+  );
+  it('does not switch protocols for an explicit Chat Completions choice', async () => {
+    status = 404;
+    await expect(
+      analyzeText(good.corrected, 'grammar', {
+        ...config('compatible'),
+        endpoint: `${baseUrl}/codex/responses`,
+        requestProtocol: 'chat-completions',
+      }),
+    ).rejects.toThrow('Chat Completions');
+    expect(captured.map((request) => request.url)).toEqual(['/codex/chat/completions']);
+  });
+  it('limits automatic route failures to two attempts and gives a sanitized protocol/path error', async () => {
+    status = 404;
+    payload = { error: 'fake-secret-test-key remote error' };
+    let failure = '';
+    try {
+      await analyzeText(good.corrected, 'grammar', {
+        ...config('compatible'),
+        endpoint: `${baseUrl}/fake-secret-test-key/codex?trace=do-not-show`,
+      });
+    } catch (error) {
+      failure = String(error);
+    }
+    expect(captured).toHaveLength(2);
+    expect(failure).toContain('Responses');
+    expect(failure).toContain('/[已隐藏]/codex/responses');
+    expect(failure).not.toContain('fake-secret-test-key');
+    expect(failure).not.toContain('do-not-show');
+    expect(failure).not.toContain('remote error');
+  });
+  it.each([400, 401, 403, 429, 500])('does not use protocol fallback for HTTP %i', async (code) => {
+    status = code;
+    await expect(
+      analyzeText(good.corrected, 'grammar', {
+        ...config('compatible'),
+        endpoint: `${baseUrl}/codex`,
+      }),
+    ).rejects.toThrow(`HTTP ${code}`);
+    expect(captured).toHaveLength(1);
+  });
+  it('does not retry a model call after malformed learning output', async () => {
+    payload = envelope({ corrected: 'incomplete data' });
+    await expect(
+      analyzeText(good.corrected, 'grammar', {
+        ...config('compatible'),
+        endpoint: `${baseUrl}/codex`,
+      }),
+    ).rejects.toThrow('格式');
+    expect(captured).toHaveLength(1);
+  });
+  it('ignores Responses settings for native Anthropic, Ollama and Azure protocols', async () => {
+    for (const provider of ['anthropic', 'ollama', 'azure'] as const) {
+      payload =
+        provider === 'anthropic'
+          ? { content: [{ type: 'text', text: JSON.stringify(good) }] }
+          : provider === 'ollama'
+            ? { message: { content: JSON.stringify(good) } }
+            : envelope(good);
+      await analyzeText(good.corrected, 'grammar', {
+        ...config(provider),
+        endpoint: baseUrl,
+        requestProtocol: 'responses',
+      });
+    }
+    expect(captured.map((request) => request.url)).toEqual([
+      '/v1/messages',
+      '/api/chat',
+      '/openai/deployments/test-model/chat/completions?api-version=2024-10-21',
+    ]);
+  });
+});
+
+describe('Responses JSON and SSE completion boundaries', () => {
+  const responsesConfig = (): Settings => ({
+    ...config('compatible'),
+    endpoint: `${baseUrl}/codex`,
+    requestProtocol: 'responses',
+  });
+  it('reads only assistant output_text and ignores reasoning/tool payloads', async () => {
+    const response = responsesEnvelope(good);
+    const text = JSON.stringify(good);
+    payload = {
+      ...response,
+      output: [
+        { type: 'reasoning', summary: [{ type: 'summary_text', text: 'not the answer' }] },
+        { type: 'function_call', name: 'ignore_me', arguments: '{}' },
+        {
+          ...response.output[0],
+          content: [
+            { type: 'output_text', text: text.slice(0, 40) },
+            { type: 'output_text', text: text.slice(40) },
+          ],
+        },
+      ],
+    };
+    expect((await analyzeText(good.corrected, 'grammar', responsesConfig())).isCorrect).toBe(true);
+  });
+  it.each(['incomplete', 'failed', 'cancelled', 'in_progress'])(
+    'rejects a JSON response with status %s even if it contains valid partial output',
+    async (responseStatus) => {
+      payload = { ...responsesEnvelope(good), status: responseStatus };
+      await expect(analyzeText(good.corrected, 'grammar', responsesConfig())).rejects.toThrow(
+        '未完成',
+      );
+      expect(captured).toHaveLength(1);
+    },
+  );
+  it('rejects refusal content rather than treating it as a correction', async () => {
+    const response = responsesEnvelope(good);
+    payload = {
+      ...response,
+      output: [
+        { ...response.output[0], content: [{ type: 'refusal', refusal: 'private refusal text' }] },
+      ],
+    };
+    await expect(analyzeText(good.corrected, 'grammar', responsesConfig())).rejects.toThrow('拒绝');
+  });
+  it('handles CRLF/multiline events, split UTF-8, repeated delta/done text and completion without waiting for EOF', async () => {
+    const completed = JSON.stringify(
+      { type: 'response.completed', response: responsesEnvelope(good) },
+      null,
+      2,
+    );
+    const event =
+      ': keepalive\r\n\r\n' +
+      sseEvent('response.created', { response: { status: 'in_progress' } }) +
+      sseEvent('response.output_text.delta', {
+        delta: JSON.stringify(good),
+        output_index: 0,
+        content_index: 0,
+      }) +
+      sseEvent('response.output_text.done', {
+        text: JSON.stringify(good),
+        output_index: 0,
+        content_index: 0,
+      }) +
+      'event: response.completed\r\n' +
+      completed
+        .split('\n')
+        .map((line) => 'data: ' + line)
+        .join('\r\n') +
+      '\r\n\r\n';
+    const encoded = Buffer.from(event);
+    const chinese = encoded.indexOf(Buffer.from('主谓一致'));
+    const cr = encoded.indexOf(Buffer.from('\r\n'));
+    replies = [
+      {
+        contentType: 'text/event-stream; charset=utf-8',
+        chunks: [
+          encoded.subarray(0, cr + 1),
+          encoded.subarray(cr + 1, chinese + 1),
+          encoded.subarray(chinese + 1, chinese + 2),
+          encoded.subarray(chinese + 2),
+        ],
+        keepOpen: true,
+      },
+    ];
+    const result = await analyzeText(good.corrected, 'grammar', responsesConfig());
+    expect(result.explanation).toBe(good.explanation);
+    expect(result.isCorrect).toBe(true);
+    expect(captured).toHaveLength(1);
+  });
+  it('accepts a final completed event at EOF without a trailing blank line', async () => {
+    replies = [
+      {
+        contentType: 'text/event-stream',
+        raw: sseEvent('response.completed', { response: responsesEnvelope(good) }).trimEnd(),
+      },
+    ];
+    await expect(analyzeText(good.corrected, 'grammar', responsesConfig())).resolves.toMatchObject({
+      isCorrect: true,
+    });
+  });
+  it.each(['error', 'response.failed', 'response.incomplete'])(
+    'rejects terminal SSE %s without repeating the model call',
+    async (type) => {
+      replies = [
+        {
+          contentType: 'text/event-stream',
+          raw:
+            sseEvent('response.output_text.delta', { delta: JSON.stringify(good) }) +
+            sseEvent(type, { error: { message: 'fake-secret-test-key' } }),
+        },
+      ];
+      let failure = '';
+      try {
+        await analyzeText(good.corrected, 'grammar', responsesConfig());
+      } catch (error) {
+        failure = String(error);
+      }
+      expect(failure).toContain('未完成');
+      expect(failure).not.toContain('fake-secret-test-key');
+      expect(captured).toHaveLength(1);
+    },
+  );
+  it.each(['', 'data: [DONE]\n\n'])(
+    'rejects a stream ending without response.completed (%j)',
+    async (suffix) => {
+      replies = [
+        {
+          contentType: 'text/event-stream',
+          raw: sseEvent('response.output_text.delta', { delta: JSON.stringify(good) }) + suffix,
+        },
+      ];
+      await expect(analyzeText(good.corrected, 'grammar', responsesConfig())).rejects.toThrow(
+        '完成结果',
+      );
+    },
+  );
+  it('rejects malformed UTF-8, malformed events and oversized streams', async () => {
+    const cases: Reply[] = [
+      {
+        contentType: 'text/event-stream',
+        chunks: [Buffer.from('data: "'), Buffer.from([0xff]), Buffer.from('"\n\n')],
+      },
+      { contentType: 'text/event-stream', raw: 'data: not-json\n\n' },
+      { contentType: 'text/event-stream', chunks: [Buffer.alloc(1_048_600, 'x')] },
+    ];
+    for (const reply of cases) {
+      replies = [reply];
+      await expect(analyzeText(good.corrected, 'grammar', responsesConfig())).rejects.toThrow();
+    }
+    expect(captured).toHaveLength(3);
   });
 });

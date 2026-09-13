@@ -37,6 +37,7 @@ const modeInput = z.enum(['grammar', 'translate']);
 const ratingInput = z.enum(['again', 'hard', 'good', 'easy']);
 const settingsInput = z.object({
   provider: z.enum(['openai', 'compatible', 'anthropic', 'azure', 'ollama']),
+  requestProtocol: z.enum(['auto', 'chat-completions', 'responses']).default('auto'),
   endpoint: z.string().max(2048),
   model: z.string().max(200),
   apiKey: z.string().max(8192),

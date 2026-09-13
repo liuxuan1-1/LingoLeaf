@@ -2,11 +2,12 @@ import type { AppState, LingoAPI } from '../shared/types';
 
 export const isPreview = !window.lingo;
 const previewState: AppState = {
-  version: '0.1.0',
+  version: '0.1.1',
   entries: [],
   shortcuts: { grammar: false, translate: false },
   settings: {
     provider: 'openai',
+    requestProtocol: 'auto',
     endpoint: 'https://api.openai.com/v1',
     model: 'gpt-4.1-mini',
     apiKey: '',
@@ -52,5 +53,6 @@ const preview: LingoAPI = {
 };
 export const api: LingoAPI = window.lingo || preview;
 export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  const message = error instanceof Error ? error.message : String(error);
+  return message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, '');
 }

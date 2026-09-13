@@ -1,5 +1,6 @@
 export type Mode = 'grammar' | 'translate';
 export type Provider = 'openai' | 'anthropic' | 'azure' | 'ollama' | 'compatible';
+export type RequestProtocol = 'auto' | 'chat-completions' | 'responses';
 export type Rating = 'again' | 'hard' | 'good' | 'easy';
 export interface Issue {
   original: string;
@@ -36,6 +37,7 @@ export interface Entry extends Analysis {
 export interface Settings {
   provider: Provider;
   endpoint: string;
+  requestProtocol?: RequestProtocol;
   model: string;
   apiKey: string;
   hasApiKey: boolean;

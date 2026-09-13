@@ -16,7 +16,7 @@
 
 ## 获取与开发
 
-首次发布：**v0.1.0 预览版**。从 [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases) 下载 Windows x64 免安装程序，启动后先配置自己的模型接口。
+当前版本：**v0.1.1 预览版**。从 [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases) 下载 Windows x64 免安装程序，启动后先配置自己的模型接口。
 
 [![Windows checks](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml)
 
@@ -43,16 +43,20 @@ npm run package
 | --- | --- | --- |
 | OpenAI | `https://api.openai.com/v1` | 有权访问的模型名 |
 | OpenAI 兼容 | 服务商给出的完整 Base URL，例如 `https://example.com/v1` | 服务商模型名 |
+| Copilot Bridge | `http://localhost:8765/codex`；协议选 Responses 或自动 | 例如 `gpt-6-astra` |
 | LM Studio | `http://127.0.0.1:1234/v1` | 本地已加载模型名 |
 | Anthropic | `https://api.anthropic.com/v1` | 有权访问的 Claude 模型名 |
 | Azure OpenAI | `https://YOUR-RESOURCE.openai.azure.com` | **部署名称**；API 版本可配置 |
 | Ollama | `http://127.0.0.1:11434` | 已下载的模型名，例如 `qwen3:8b` |
 
-模型必须能遵循 JSON 输出指令。兼容接口走 Chat Completions，Anthropic 走 Messages，Ollama 走原生 `/api/chat`。Azure 支持传统部署地址和完整 Chat Completions URL。服务商模型权限和计费由用户自己的账户决定；软件没有内置共享 API Key。
+模型必须能遵循 JSON 输出指令。OpenAI 和兼容接口支持 **Chat Completions / Responses**：自动模式识别完整 `/responses` 地址，或在 Chat 路由返回 404/405 时尝试一次同源 Responses；认证、限流、生成失败和断流不会触发重复请求。也可以手动指定协议。Responses 同时支持 JSON 和 SSE 返回，并且只接受完整生成结果。Anthropic 走 Messages，Ollama 走原生 `/api/chat`，Azure 保持传统部署 Chat Completions 协议。服务商模型权限和计费由用户自己的账户决定；软件没有内置共享 API Key。
+
+[Copilot Bridge 文档](https://github.com/hooyao/copilot-bridge#point-codex-at-the-bridge) 的 `/codex` 入口使用 Responses 协议。v0.1.0 只支持 Chat Completions，连接该入口会返回 404；请升级到 v0.1.1，无需修改 Bridge 配置。旧设置、密钥和学习笔记会保留。
 
 远程 API 使用 HTTPS，本机环回地址可用 HTTP。自托管的远程服务请配置 HTTPS。API Key 由 Electron `safeStorage` 在 Windows 用户上下文加密保存，渲染界面读不到已保存的明文密钥，也不会写进 Markdown、移动页面或导出文件。
 
 OpenAI 协议参考：[Chat Completions API](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)。
+Responses 参考：[Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create)。
 
 ## 学习库与手机
 

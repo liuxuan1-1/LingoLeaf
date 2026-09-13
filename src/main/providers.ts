@@ -38,8 +38,9 @@ export const analysisSchema = outputSchema
   .strict();
 
 class ProviderError extends Error {}
+type RequestProtocol = 'chat-completions' | 'responses';
 
-function endpointUrl(settings: Settings): URL {
+function baseEndpoint(settings: Settings): URL {
   const value = settings.endpoint.trim() || PROVIDER_DEFAULTS[settings.provider]?.endpoint;
   if (!value) throw new ProviderError('请先填写 API 地址。');
   let url: URL;
@@ -59,6 +60,23 @@ function endpointUrl(settings: Settings): URL {
   if ([...url.searchParams.keys()].some((key) => /key|token|secret|password/i.test(key))) {
     throw new ProviderError('请把密钥填入 API Key 栏，不要放在 API 地址中。');
   }
+  return url;
+}
+
+function firstProtocol(settings: Settings, endpoint: URL): RequestProtocol {
+  if (!['openai', 'compatible'].includes(settings.provider)) return 'chat-completions';
+  const configured = settings.requestProtocol ?? 'auto';
+  if (!['auto', 'chat-completions', 'responses'].includes(configured)) {
+    throw new ProviderError('不支持的请求协议，请选择自动、Chat Completions 或 Responses。');
+  }
+  if (configured !== 'auto') return configured;
+  return endpoint.pathname.replace(/\/+$/, '').endsWith('/responses')
+    ? 'responses'
+    : 'chat-completions';
+}
+
+function endpointUrl(settings: Settings, base: URL, protocol: RequestProtocol): URL {
+  const url = new URL(base);
   let pathname = url.pathname.replace(/\/+$/, '');
   if (settings.provider === 'azure') {
     if (!pathname.endsWith('/chat/completions')) {
@@ -73,11 +91,34 @@ function endpointUrl(settings: Settings): URL {
     if (!pathname.endsWith('/api/chat'))
       pathname += `${pathname.endsWith('/api') ? '' : '/api'}/chat`;
   } else {
-    if (!pathname.endsWith('/chat/completions'))
-      pathname += `${pathname ? '' : '/v1'}/chat/completions`;
+    const hadTerminalRoute = /\/(?:chat\/completions|responses)$/.test(pathname);
+    pathname = pathname.replace(/\/(?:chat\/completions|responses)$/, '');
+    if (!pathname && !hadTerminalRoute) pathname = '/v1';
+    pathname += protocol === 'responses' ? '/responses' : '/chat/completions';
   }
   url.pathname = pathname;
   return url;
+}
+
+function requestContext(url: URL, protocol: RequestProtocol, settings: Settings): string {
+  const name =
+    settings.provider === 'anthropic'
+      ? 'Anthropic Messages'
+      : settings.provider === 'ollama'
+        ? 'Ollama Chat'
+        : settings.provider === 'azure'
+          ? 'Azure Chat Completions'
+          : protocol === 'responses'
+            ? 'Responses'
+            : 'Chat Completions';
+  let pathname = url.pathname;
+  const secret = settings.apiKey.trim();
+  if (secret) {
+    for (const value of [secret, encodeURIComponent(secret)])
+      pathname = pathname.split(value).join('[已隐藏]');
+  }
+  // URLs and remote error bodies are never exposed; show only the sanitized request path.
+  return `（${name} · ${pathname.slice(0, 240)}${pathname.length > 240 ? '…' : ''}）`;
 }
 
 function systemPrompt(mode: Mode, settings: Settings): string {
@@ -93,8 +134,10 @@ ${
 
 async function limitedJson(response: Response): Promise<unknown> {
   const limit = 1_048_576;
-  if (Number(response.headers.get('content-length')) > limit)
+  if (Number(response.headers.get('content-length')) > limit) {
+    await response.body?.cancel();
     throw new ProviderError('API 返回内容过大。');
+  }
   if (!response.body) throw new ProviderError('API 返回了空响应。');
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -115,6 +158,132 @@ async function limitedJson(response: Response): Promise<unknown> {
     if (error instanceof ProviderError) throw error;
     throw new ProviderError('API 未返回有效的 JSON 响应。请检查接口地址和模型。');
   } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+}
+
+function responsesText(payload: unknown, completedEvent = false): string {
+  const parsed = z.record(z.unknown()).safeParse(payload);
+  if (!parsed.success) throw new ProviderError('Responses 返回结构无效。');
+  const response = parsed.data;
+  if (
+    response.error ||
+    (response.status !== 'completed' && !(completedEvent && response.status === undefined))
+  ) {
+    throw new ProviderError('Responses 未完成生成，请重试；未保存或应用部分结果。');
+  }
+  if (!Array.isArray(response.output))
+    throw new ProviderError('Responses 没有返回可用的输出内容。');
+  const texts: string[] = [];
+  for (const item of response.output) {
+    if (!item || typeof item !== 'object' || item.type !== 'message' || item.role !== 'assistant')
+      continue;
+    if (item.status !== undefined && item.status !== 'completed') {
+      throw new ProviderError('Responses 消息尚未完成，未保存或应用部分结果。');
+    }
+    if (!Array.isArray(item.content)) continue;
+    for (const part of item.content) {
+      if (part?.type === 'refusal')
+        throw new ProviderError('模型拒绝了这个请求，未返回可用的学习内容。');
+      if (part?.type === 'output_text' && typeof part.text === 'string') texts.push(part.text);
+    }
+  }
+  const text = texts.join('');
+  if (!text.trim()) throw new ProviderError('Responses 没有返回可用的文本，请检查模型与协议。');
+  return text;
+}
+
+async function responsesStreamText(response: Response): Promise<string> {
+  const limit = 1_048_576;
+  if (Number(response.headers.get('content-length')) > limit) {
+    await response.body?.cancel();
+    throw new ProviderError('API 返回内容过大。');
+  }
+  if (!response.body) throw new ProviderError('Responses 返回了空响应。');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  let bytes = 0,
+    pending = '',
+    eventName = '';
+  let data: string[] = [];
+  const dispatch = (): string | undefined => {
+    const name = eventName;
+    eventName = '';
+    if (!data.length) return undefined;
+    const serialized = data.join('\n');
+    data = [];
+    if (serialized.trim() === '[DONE]')
+      throw new ProviderError('Responses 流未提供完成结果，请重试。');
+    let event: Record<string, unknown>;
+    try {
+      event = z.record(z.unknown()).parse(JSON.parse(serialized));
+    } catch {
+      throw new ProviderError('Responses 流包含无效的 JSON 事件。');
+    }
+    const type = typeof event.type === 'string' ? event.type : name;
+    if (type === 'response.completed') return responsesText(event.response, true);
+    if (['error', 'response.failed', 'response.incomplete', 'response.cancelled'].includes(type)) {
+      throw new ProviderError('Responses 流生成失败或未完成，未保存或应用部分结果。');
+    }
+    if (['response.refusal.delta', 'response.refusal.done'].includes(type)) {
+      throw new ProviderError('模型拒绝了这个请求，未返回可用的学习内容。');
+    }
+    // Deltas, output_text.done and output_item.done can repeat the same text.
+    // The completed response is authoritative; never concatenate these copies.
+    return undefined;
+  };
+  const line = (value: string): string | undefined => {
+    if (!value) return dispatch();
+    if (value.startsWith(':')) return undefined;
+    const colon = value.indexOf(':');
+    const field = colon < 0 ? value : value.slice(0, colon);
+    let contents = colon < 0 ? '' : value.slice(colon + 1);
+    if (contents.startsWith(' ')) contents = contents.slice(1);
+    if (field === 'data') data.push(contents);
+    else if (field === 'event') eventName = contents;
+    return undefined;
+  };
+  const consume = (end = false): string | undefined => {
+    while (true) {
+      const index = pending.search(/[\r\n]/);
+      if (index < 0 || (!end && pending[index] === '\r' && index === pending.length - 1)) break;
+      const length = pending[index] === '\r' && pending[index + 1] === '\n' ? 2 : 1;
+      const value = pending.slice(0, index);
+      pending = pending.slice(index + length);
+      const result = line(value);
+      if (result !== undefined) return result;
+    }
+    if (end) {
+      if (pending) {
+        const result = line(pending);
+        pending = '';
+        if (result !== undefined) return result;
+      }
+      return dispatch();
+    }
+    return undefined;
+  };
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) {
+        pending += decoder.decode();
+        const final = consume(true);
+        if (final !== undefined) return final;
+        throw new ProviderError('Responses 连接提前结束，未收到完成结果，请重试。');
+      }
+      bytes += chunk.value.byteLength;
+      if (bytes > limit) throw new ProviderError('API 返回内容过大。');
+      pending += decoder.decode(chunk.value, { stream: true });
+      const result = consume();
+      if (result !== undefined) return result;
+    }
+  } catch (error) {
+    if (error instanceof ProviderError) throw error;
+    throw new ProviderError('Responses 流无法完整读取，请检查网络并重试。');
+  } finally {
+    await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }
@@ -162,7 +331,9 @@ export async function analyzeText(text: string, mode: Mode, settings: Settings):
     throw new ProviderError('模型名称或 API Key 过长。');
   if (['openai', 'anthropic', 'azure'].includes(settings.provider) && !settings.apiKey.trim())
     throw new ProviderError('请先在设置中保存 API Key。');
-  const url = endpointUrl(settings);
+  const base = baseEndpoint(settings);
+  let protocol = firstProtocol(settings, base);
+  let url = endpointUrl(settings, base, protocol);
   const system = systemPrompt(mode, settings);
   const messages = [
     { role: 'system', content: system },
@@ -196,16 +367,45 @@ export async function analyzeText(text: string, mode: Mode, settings: Settings):
     // Compatible servers differ in support for response_format and token-limit fields.
     // The JSON-only prompt plus strict local validation is portable across them.
   }
+  const requestBody = (): Record<string, unknown> => {
+    if (protocol !== 'responses') return body;
+    const responseBody: Record<string, unknown> = {
+      model: settings.model.trim(),
+      instructions: system,
+      input: [{ role: 'user', content: [{ type: 'input_text', text: JSON.stringify({ text }) }] }],
+      store: false,
+      stream: true,
+    };
+    if (settings.provider === 'openai') {
+      responseBody.max_output_tokens = 4096;
+      responseBody.text = { format: { type: 'json_object' } };
+    }
+    return responseBody;
+  };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 60_000);
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: controller.signal,
-      redirect: 'error',
-    });
+    const send = () =>
+      fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody()),
+        signal: controller.signal,
+        redirect: 'error',
+      });
+    let response = await send();
+    const canFallback =
+      (settings.requestProtocol ?? 'auto') === 'auto' &&
+      ['openai', 'compatible'].includes(settings.provider) &&
+      protocol === 'chat-completions';
+    if (canFallback && [404, 405].includes(response.status)) {
+      await response.body?.cancel();
+      protocol = 'responses';
+      const fallback = endpointUrl(settings, base, protocol);
+      if (fallback.origin !== url.origin) throw new ProviderError('协议切换不能跨服务地址。');
+      url = fallback;
+      response = await send();
+    }
     if (!response.ok) {
       await response.body?.cancel();
       const message =
@@ -213,15 +413,25 @@ export async function analyzeText(text: string, mode: Mode, settings: Settings):
           ? '认证失败，请检查 API Key、权限和服务商。'
           : response.status === 429
             ? '请求受限或余额不足，请稍后重试并检查额度。'
-            : response.status === 404
-              ? '未找到接口或模型，请检查 API 地址、模型名称和 Azure 部署。'
+            : response.status === 404 || response.status === 405
+              ? settings.provider === 'azure'
+                ? '未找到接口或部署，请检查 Azure 资源地址、部署名称和 API 版本。'
+                : '未找到接口或模型，请检查模型名称、接口地址和请求协议；Codex 类接口请使用 Responses。'
               : response.status >= 500
                 ? '服务商暂时不可用，请稍后重试。'
                 : '请求被服务商拒绝，请检查模型与接口配置。';
       throw new ProviderError(`${message} (HTTP ${response.status})`);
     }
-    const payload = await limitedJson(response);
-    let raw = contentText(payload, settings.provider).trim();
+    const eventStream =
+      response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() ===
+      'text/event-stream';
+    let raw = (
+      protocol === 'responses'
+        ? eventStream
+          ? await responsesStreamText(response)
+          : responsesText(await limitedJson(response))
+        : contentText(await limitedJson(response), settings.provider)
+    ).trim();
     const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/.exec(raw);
     if (fenced) raw = fenced[1];
     let parsed: z.infer<typeof outputSchema>;
@@ -247,11 +457,12 @@ export async function analyzeText(text: string, mode: Mode, settings: Settings):
     }
     return { ...parsed, original: text, mode };
   } catch (error) {
+    const context = requestContext(url, protocol, settings);
     if (controller.signal.aborted)
-      throw new ProviderError('请求超过 60 秒。请检查网络，或改用响应更快的模型。');
-    if (error instanceof ProviderError) throw error;
+      throw new ProviderError(`请求超过 60 秒。请检查网络，或改用响应更快的模型。${context}`);
+    if (error instanceof ProviderError) throw new ProviderError(`${error.message}${context}`);
     // Never surface raw fetch errors: they can contain URLs or credentials supplied by a server.
-    throw new ProviderError('无法连接 API。请检查网络、服务地址和本地模型是否已启动。');
+    throw new ProviderError(`无法连接 API。请检查网络、服务地址和本地模型是否已启动。${context}`);
   } finally {
     clearTimeout(timer);
   }

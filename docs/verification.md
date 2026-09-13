@@ -14,7 +14,7 @@ This file is updated from actual checks before release. Passing a mocked HTTP ad
 - Portable build starts on this Windows host and contains native resources.
 - Public GitHub source and CI verification.
 
-## Verified on Windows, 2026-09-13
+## v0.1.0 verified on Windows, 2026-09-13
 
 - `npm test`: **75 passing tests** (24 provider, 11 store, 4 scheduler, 21 native, 15 mobile). Native tests include the actual hidden Windows PowerShell/C# protocol startup and rejection of an invalid capture without injecting input. Mobile tests include a real LibraryStore restart after a phone rating.
 - `npm run build`: TypeScript, Vite production renderer and esbuild main/preload all pass.
@@ -31,3 +31,13 @@ Interactive model responses came from the explicitly labeled local fixture in `t
 Physical phone connectivity, firewall behavior on another machine, unusual editor/clipboard formats, and live accounts for each provider were not manually exercised. The application requires the user's own working model configuration. The mobile companion needs a trusted shared network and a running desktop; synced Markdown remains available independently.
 
 Future native changes should rerun Notepad acceptance and add the affected editor to this matrix. Future protocol changes should update fixtures and, when credentials are available, run a live provider smoke check without committing credentials or private text.
+
+## v0.1.1 Responses compatibility fix
+
+- Confirmed the reported Copilot Bridge service has no `/codex/chat/completions` route, while `/codex/responses` accepts POST. Its upstream README explicitly pairs `/codex` with `wire_api = "responses"`.
+- Added explicit and automatic Chat Completions / Responses selection. Auto fallback is limited to a single same-origin retry after HTTP 404/405. Full Responses URLs are recognized directly.
+- Provider suite now has 54 passing tests, including JSON and streamed SSE completion, split UTF-8, terminal errors, refusal, truncated streams, duplicate events, bounded responses and no retry for authentication or completed-but-invalid output.
+- Added old-settings migration coverage: existing encrypted credentials, learning entries and Markdown notes survive choosing and persisting the new protocol.
+- **Live Copilot Bridge check:** the corrected adapter connected to the user's existing local Bridge with model `gpt-6-astra`, protocol auto, and no client API key. It corrected `She go to school every day.` to `She goes to school every day.` and supplied the matching subject–verb agreement explanation in approximately 4.1 seconds. No Bridge settings, auth files or user learning records were modified.
+
+This live check validates that Bridge/model combination. It does not establish access to separate paid OpenAI, Anthropic or Azure accounts. Native selection and mobile behavior are unchanged by this protocol fix.

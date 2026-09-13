@@ -8,6 +8,7 @@ import type { Analysis, Entry, Rating, Settings } from '../shared/types';
 
 export const DEFAULT_SETTINGS: Settings = {
   provider: 'openai',
+  requestProtocol: 'auto',
   endpoint: PROVIDER_DEFAULTS.openai.endpoint,
   model: PROVIDER_DEFAULTS.openai.model,
   apiKey: '',
@@ -26,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
 const settingsSchema = z
   .object({
     provider: z.enum(['openai', 'anthropic', 'azure', 'ollama', 'compatible']),
+    requestProtocol: z.enum(['auto', 'chat-completions', 'responses']).default('auto'),
     endpoint: z.string().max(2000),
     model: z.string().max(200),
     apiKey: z.string().max(16000),

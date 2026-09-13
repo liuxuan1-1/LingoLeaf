@@ -40,6 +40,39 @@ afterEach(async () => {
 });
 
 describe('learning storage', () => {
+  it('loads pre-protocol settings and preserves credentials and notes when selecting Responses', async () => {
+    const original = makeStore();
+    await original.init();
+    await original.saveSettings({
+      ...original.getSettings(),
+      provider: 'compatible',
+      endpoint: 'http://localhost:8765/codex',
+      apiKey: 'existing-key',
+    });
+    const entry = await original.add(analysis, original.getSettings());
+    const configPath = path.join(directory, 'settings.json');
+    const saved = JSON.parse(await fs.readFile(configPath, 'utf8'));
+    delete saved.settings.requestProtocol;
+    await fs.writeFile(configPath, JSON.stringify(saved));
+
+    const migrated = makeStore();
+    await migrated.init();
+    expect(migrated.getSettings().requestProtocol).toBe('auto');
+    expect(migrated.getProviderSettings().apiKey).toBe('existing-key');
+    expect(migrated.list()).toEqual([entry]);
+    await migrated.saveSettings({ ...migrated.getSettings(), requestProtocol: 'responses' });
+
+    const restarted = makeStore();
+    await restarted.init();
+    expect(restarted.getSettings()).toMatchObject({
+      requestProtocol: 'responses',
+      hasApiKey: true,
+      apiKey: '',
+    });
+    expect(restarted.getProviderSettings().apiKey).toBe('existing-key');
+    expect(restarted.list()).toEqual([entry]);
+    expect(await fs.readdir(path.join(restarted.getLibraryDirectory(), 'entries'))).toHaveLength(1);
+  });
   it('persists analyses, encrypted credentials, and redacted public settings across a restart', async () => {
     const first = makeStore();
     await first.init();
