@@ -1,0 +1,24 @@
+name: Windows checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test-and-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Package Windows application
+        run: npx electron-builder --win --dir --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LingoLeaf-windows-x64
+          path: release/win-unpacked/

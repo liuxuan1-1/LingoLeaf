@@ -1,0 +1,68 @@
+{
+  "name": "lingoleaf",
+  "productName": "LingoLeaf",
+  "version": "0.1.0",
+  "description": "Turn everyday sentences into lasting language skills. A Windows language companion.",
+  "author": "LingoLeaf contributors",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/main/main.cjs",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "tsc --noEmit && vite build && node scripts/build-main.mjs",
+    "start": "electron .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "package": "npm run build && electron-builder --win portable --publish never",
+    "package:dir": "npm run build && electron-builder --win --dir --publish never"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^40.0.0",
+    "electron-builder": "^26.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^3.0.0"
+  },
+  "build": {
+    "appId": "org.lingoleaf.desktop",
+    "productName": "LingoLeaf",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "native",
+        "to": "native"
+      },
+      {
+        "from": "assets/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "artifactName": "LingoLeaf-${version}-${arch}.${ext}",
+      "signAndEditExecutable": true,
+      "icon": "assets/icon.ico"
+    }
+  }
+}
