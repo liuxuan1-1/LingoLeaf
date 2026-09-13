@@ -41,3 +41,14 @@ Future native changes should rerun Notepad acceptance and add the affected edito
 - **Live Copilot Bridge check:** the corrected adapter connected to the user's existing local Bridge with model `gpt-6-astra`, protocol auto, and no client API key. It corrected `She go to school every day.` to `She goes to school every day.` and supplied the matching subject–verb agreement explanation in approximately 4.1 seconds. No Bridge settings, auth files or user learning records were modified.
 
 This live check validates that Bridge/model combination. It does not establish access to separate paid OpenAI, Anthropic or Azure accounts. Native selection and mobile behavior are unchanged by this protocol fix.
+
+## v0.2.0 themes and readability
+
+- Added four semantic desktop palettes (forest, ocean, lavender and midnight), plus system light/dark following, with standard/large/extra-large reading sizes. Default body baseline is18px, controls16.2px and helper text14.76px; extra-large uses20/18/16.4px respectively.
+- Appearance is stored through a separate serialized save method. The18 store tests cover migration from older settings, credential/protocol/library preservation, invalid values, no Markdown rewrites, concurrent model-settings saves, and failed-write recovery. The full suite has112 passing tests.
+- Used `tests/fixtures/appearance-preview.html` (synthetic UI data, no model calls) to inspect actual renderer components. At1280×720 in all four themes, the visible settings view had no horizontal overflow or low-contrast text in a read-only DOM estimate. Decorative13.5px labels remain separate from content/control text.
+- At900×640 with midnight and extra-large text, inspected the model form, its error state and save controls, learning-card detail dialog, and all four review ratings. Inspected content and actions in the440×620 popup, including long grammar/translation content and an error message; no horizontal overflow or low-contrast text was detected in the checked visible content.
+- Confirmed theme changes preserve an unsaved model-name edit; reload retains selected appearance. An already-open popup followed theme/font changes without reload. Emulated both system color schemes and observed the correct automatic light/dark switch.
+- Short-height layouts hide decorative sidebar copy to keep navigation usable. Compact popup actions wrap into two rows; content remains scrollable. Theme colors also drive native window backgrounds.
+
+The DOM checks are viewport-specific estimates, not a blanket accessibility certification. These appearance checks do not make new calls to paid models or alter a running user's settings.

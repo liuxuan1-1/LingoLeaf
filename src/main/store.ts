@@ -4,7 +4,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { analysisSchema, PROVIDER_DEFAULTS } from './providers';
 import { initialReview, scheduleReview } from '../shared/scheduler';
-import type { Analysis, Entry, Rating, Settings } from '../shared/types';
+import type { Analysis, AppearanceSettings, Entry, Rating, Settings } from '../shared/types';
 
 export const DEFAULT_SETTINGS: Settings = {
   provider: 'openai',
@@ -22,7 +22,16 @@ export const DEFAULT_SETTINGS: Settings = {
   autoReplace: true,
   launchAtLogin: false,
   saveCorrectSentences: false,
+  theme: 'forest',
+  fontSize: 'large',
 };
+
+const appearanceSchema = z
+  .object({
+    theme: z.enum(['system', 'forest', 'ocean', 'lavender', 'midnight']),
+    fontSize: z.enum(['standard', 'large', 'extra-large']),
+  })
+  .strict();
 
 const settingsSchema = z
   .object({
@@ -45,6 +54,8 @@ const settingsSchema = z
     launchAtLogin: z.boolean(),
     saveCorrectSentences: z.boolean(),
     clearApiKey: z.boolean().optional(),
+    theme: appearanceSchema.shape.theme.default('forest'),
+    fontSize: appearanceSchema.shape.fontSize.default('large'),
   })
   .strict();
 
@@ -263,6 +274,22 @@ export class LibraryStore {
       apiKey: this.credentials[credentialScope(this.settings)] || '',
     };
   }
+  getAppearance(): AppearanceSettings {
+    return {
+      theme: this.settings.theme ?? 'forest',
+      fontSize: this.settings.fontSize ?? 'large',
+    };
+  }
+  async saveAppearance(value: AppearanceSettings): Promise<AppearanceSettings> {
+    return this.serial(async () => {
+      const result = appearanceSchema.safeParse(value);
+      if (!result.success) throw new Error('外观设置无效，请检查主题和字号。');
+      const settings = { ...this.settings, ...result.data };
+      await this.persistSettings(settings, this.credentials);
+      this.settings = settings;
+      return this.getAppearance();
+    });
+  }
   getLibraryDirectory(): string {
     return path.join(this.settings.libraryPath, 'LingoLeaf');
   }
@@ -277,7 +304,9 @@ export class LibraryStore {
 
   async saveSettings(value: Settings): Promise<Settings> {
     return this.serial(async () => {
-      const result = settingsSchema.safeParse(value);
+      // Appearance has its own scoped save API. A stale full-settings draft must
+      // not overwrite appearance changes committed while that draft was open.
+      const result = settingsSchema.safeParse({ ...value, ...this.getAppearance() });
       if (!result.success) throw new Error('设置格式无效，请检查输入。');
       const { clearApiKey, ...settings } = result.data;
       if (!path.isAbsolute(settings.libraryPath)) throw new Error('请选择一个有效的学习库文件夹。');

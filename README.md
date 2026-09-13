@@ -16,7 +16,7 @@
 
 ## 获取与开发
 
-当前版本：**v0.1.1 预览版**。从 [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases) 下载 Windows x64 免安装程序，启动后先配置自己的模型接口。
+当前版本：**v0.2.0 预览版**。从 [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases) 下载 Windows x64 免安装程序，启动后先配置自己的模型接口。
 
 [![Windows checks](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml)
 
@@ -36,6 +36,14 @@ npm run package
 ```
 
 生成的 Windows 可执行文件在 `release/`。目前构建不包含代码签名。发布前应自行签名，并在目标 Windows 环境检查安全提示。不要提交运行数据或密钥。
+
+## 外观与阅读
+
+在「偏好设置」最上方的「外观与阅读」中选择 **松林米白、晴空蓝白、雾紫、午夜深色**，或让明暗主题跟随 Windows 系统。主题覆盖主界面、表单、学习卡片、应用内对话框和划词结果弹窗。
+
+文字提供 **标准 / 大号 / 特大** 三档，正文基准分别为 16 / 18 / 20px，默认大号。说明、标签和按钮使用各自的易读字号；窗口较小时会重新排列并滚动，避免放大文字后挤掉操作按钮。
+
+点击后即时生效并独立保存，不需要点击模型设置的「保存设置」，也不会提交或覆盖尚未保存的接口修改。已打开的划词弹窗会跟随更新，重新打开应用仍保留选择。升级会保留原模型设置、密钥和学习库。
 
 ## 接口配置
 

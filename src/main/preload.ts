@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { LingoAPI, ResultEvent } from '../shared/types';
 const api: LingoAPI = {
+  getAppearance: () => ipcRenderer.invoke('appearance:get'),
+  saveAppearance: (appearance) => ipcRenderer.invoke('appearance:save', appearance),
   getState: () => ipcRenderer.invoke('state:get'),
   analyze: (text, mode) => ipcRenderer.invoke('analyze', { text, mode }),
   saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),

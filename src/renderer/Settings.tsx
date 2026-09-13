@@ -19,6 +19,7 @@ import { useEffect, useState } from 'react';
 import type { Provider, RequestProtocol, Settings } from '../shared/types';
 import { api, errorMessage } from './bridge';
 import { SectionHeading, Shortcut, Spinner, Toggle, type Notify } from './components';
+import { AppearanceCard } from './AppearanceCard';
 
 const providers: { id: Provider; name: string; detail: string; endpoint: string; model: string }[] =
   [
@@ -239,6 +240,7 @@ export function SettingsPage({
           </span>
         }
       />
+      <AppearanceCard />
       <div className="settings-layout">
         <fieldset className="settings-main" disabled={testing || saving}>
           <section className="card settings-card">

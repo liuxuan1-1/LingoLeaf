@@ -1,12 +1,15 @@
 import type { AppState, LingoAPI } from '../shared/types';
+import { APPEARANCE_CACHE_KEY, normalizeAppearance } from '../shared/appearance';
 
 export const isPreview = !window.lingo;
 const previewState: AppState = {
-  version: '0.1.1',
+  version: '0.2.0',
   entries: [],
   shortcuts: { grammar: false, translate: false },
   settings: {
     provider: 'openai',
+    theme: 'forest',
+    fontSize: 'large',
     requestProtocol: 'auto',
     endpoint: 'https://api.openai.com/v1',
     model: 'gpt-4.1-mini',
@@ -29,6 +32,18 @@ const desktopRequired = async (): Promise<never> => {
   );
 };
 const preview: LingoAPI = {
+  getAppearance: async () => {
+    try {
+      return normalizeAppearance(JSON.parse(localStorage.getItem(APPEARANCE_CACHE_KEY) || 'null'));
+    } catch {
+      return normalizeAppearance(null);
+    }
+  },
+  saveAppearance: async (value) => {
+    const appearance = normalizeAppearance(value);
+    localStorage.setItem(APPEARANCE_CACHE_KEY, JSON.stringify(appearance));
+    return appearance;
+  },
   getState: async () => structuredClone(previewState),
   analyze: desktopRequired,
   saveSettings: desktopRequired,

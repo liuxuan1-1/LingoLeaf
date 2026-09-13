@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { Popup } from './Popup';
 import './styles.css';
+import { AppearanceProvider, bootstrapAppearance } from './appearance';
+
+bootstrapAppearance();
 
 class ErrorBoundary extends React.Component<React.PropsWithChildren, { error: string }> {
   state = { error: '' };
@@ -27,6 +30,10 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren, { error: st
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ErrorBoundary>{location.hash.startsWith('#popup') ? <Popup /> : <App />}</ErrorBoundary>
+    <ErrorBoundary>
+      <AppearanceProvider>
+        {location.hash.startsWith('#popup') ? <Popup /> : <App />}
+      </AppearanceProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );

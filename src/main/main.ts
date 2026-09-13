@@ -8,6 +8,7 @@ import {
   globalShortcut,
   ipcMain,
   nativeImage,
+  nativeTheme,
   safeStorage,
   screen,
   shell,
@@ -20,6 +21,7 @@ import { analyzeText, testProvider } from './providers';
 import { NativeService, type NativeCapture } from './native';
 import { MobileServer } from './mobile';
 import type { Analysis, Mode, ResultEvent, Settings } from '../shared/types';
+import { DEFAULT_APPEARANCE, resolveTheme, WINDOW_BACKGROUNDS } from '../shared/appearance';
 
 let main: BrowserWindow | undefined, popup: BrowserWindow | undefined, tray: Tray | undefined;
 let store: LibraryStore, native: NativeService, mobile: MobileServer;
@@ -58,6 +60,18 @@ function broadcast() {
   for (const w of BrowserWindow.getAllWindows())
     if (!w.isDestroyed()) w.webContents.send('changed');
 }
+function windowBackground() {
+  const appearance = store?.getAppearance() ?? DEFAULT_APPEARANCE;
+  return WINDOW_BACKGROUNDS[resolveTheme(appearance.theme, nativeTheme.shouldUseDarkColors)];
+}
+function applyNativeAppearance() {
+  for (const window of BrowserWindow.getAllWindows()) window.setBackgroundColor(windowBackground());
+}
+function syncNativeTheme() {
+  const theme = store.getAppearance().theme;
+  nativeTheme.themeSource = theme === 'system' ? 'system' : theme === 'midnight' ? 'dark' : 'light';
+  applyNativeAppearance();
+}
 function publish(result: ResultEvent) {
   latestResult = result;
   if (popup && !popup.isDestroyed()) popup.webContents.send('result', result);
@@ -83,7 +97,7 @@ function showMain() {
       minWidth: 900,
       minHeight: 640,
       frame: false,
-      backgroundColor: '#f7f7f2',
+      backgroundColor: windowBackground(),
       show: false,
       title: 'LingoLeaf · 语叶',
       webPreferences: {
@@ -119,7 +133,7 @@ function showPopup(activate = true) {
       alwaysOnTop: true,
       skipTaskbar: true,
       show: false,
-      backgroundColor: '#f7f7f2',
+      backgroundColor: windowBackground(),
       title: 'LingoLeaf · 划词助手',
       webPreferences: {
         preload: path.join(__dirname, 'preload.cjs'),
@@ -251,6 +265,20 @@ function handle(channel: string, handler: (...args: any[]) => unknown) {
   });
 }
 function setupIPC() {
+  handle('appearance:get', () => store.getAppearance());
+  handle('appearance:save', async (value: unknown) => {
+    const appearance = z
+      .object({
+        theme: z.enum(['system', 'forest', 'ocean', 'lavender', 'midnight']),
+        fontSize: z.enum(['standard', 'large', 'extra-large']),
+      })
+      .strict()
+      .parse(value);
+    const saved = await store.saveAppearance(appearance);
+    syncNativeTheme();
+    broadcast();
+    return saved;
+  });
   handle('state:get', () => ({
     settings: store.getSettings(),
     entries: store.list(),
@@ -420,6 +448,7 @@ else {
         (value) => safeStorage.decryptString(Buffer.from(value, 'base64')),
       );
       await store.init();
+      syncNativeTheme();
       native = new NativeService(
         app.isPackaged
           ? path.join(process.resourcesPath, 'native')
@@ -430,6 +459,7 @@ else {
       });
       mobile = new MobileServer(store, broadcast);
       setupIPC();
+      nativeTheme.on('updated', applyNativeAppearance);
       registerShortcuts(store.getSettings());
       const icon = nativeImage.createFromPath(
         app.isPackaged

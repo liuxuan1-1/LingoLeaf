@@ -1,6 +1,12 @@
 export type Mode = 'grammar' | 'translate';
 export type Provider = 'openai' | 'anthropic' | 'azure' | 'ollama' | 'compatible';
 export type RequestProtocol = 'auto' | 'chat-completions' | 'responses';
+export type Theme = 'system' | 'forest' | 'ocean' | 'lavender' | 'midnight';
+export type FontSize = 'standard' | 'large' | 'extra-large';
+export interface AppearanceSettings {
+  theme: Theme;
+  fontSize: FontSize;
+}
 export type Rating = 'again' | 'hard' | 'good' | 'easy';
 export interface Issue {
   original: string;
@@ -35,6 +41,8 @@ export interface Entry extends Analysis {
   targetLanguage: string;
 }
 export interface Settings {
+  theme?: Theme;
+  fontSize?: FontSize;
   provider: Provider;
   endpoint: string;
   requestProtocol?: RequestProtocol;
@@ -82,6 +90,8 @@ export interface MobileStatus {
   token?: string;
 }
 export interface LingoAPI {
+  getAppearance(): Promise<AppearanceSettings>;
+  saveAppearance(appearance: AppearanceSettings): Promise<AppearanceSettings>;
   getState(): Promise<AppState>;
   analyze(text: string, mode: Mode): Promise<Analysis>;
   saveSettings(settings: Settings): Promise<Settings>;

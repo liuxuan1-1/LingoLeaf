@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LibraryStore, renderEntryMarkdown } from '../src/main/store';
-import type { Analysis } from '../src/shared/types';
+import type { Analysis, AppearanceSettings } from '../src/shared/types';
 
 let directory: string;
 const protect = (value: string) => `protected:${Buffer.from(value).toString('base64')}`;
@@ -53,11 +53,14 @@ describe('learning storage', () => {
     const configPath = path.join(directory, 'settings.json');
     const saved = JSON.parse(await fs.readFile(configPath, 'utf8'));
     delete saved.settings.requestProtocol;
+    delete saved.settings.theme;
+    delete saved.settings.fontSize;
     await fs.writeFile(configPath, JSON.stringify(saved));
 
     const migrated = makeStore();
     await migrated.init();
     expect(migrated.getSettings().requestProtocol).toBe('auto');
+    expect(migrated.getAppearance()).toEqual({ theme: 'forest', fontSize: 'large' });
     expect(migrated.getProviderSettings().apiKey).toBe('existing-key');
     expect(migrated.list()).toEqual([entry]);
     await migrated.saveSettings({ ...migrated.getSettings(), requestProtocol: 'responses' });
@@ -185,6 +188,10 @@ describe('learning storage', () => {
     expect(store.getSyncError()).toContain('Markdown 同步失败');
     const persisted = JSON.parse(await fs.readFile(path.join(directory, 'library.json'), 'utf8'));
     expect(persisted.entries[0].id).toBe(entry.id);
+    const warning = store.getSyncError();
+    await store.saveAppearance({ theme: 'ocean', fontSize: 'large' });
+    expect(store.getSyncError()).toBe(warning);
+    expect(store.getAppearance().theme).toBe('ocean');
   });
   it('never publishes a partial immutable note and retries failed publication from committed data', async () => {
     const store = makeStore();
@@ -240,5 +247,187 @@ describe('learning storage', () => {
     expect(markdown).toContain('````text\n```');
     expect(markdown).toContain('&lt;script&gt;');
     expect(markdown).toContain('\\[click\\]\\(javascript:evil\\)');
+  });
+});
+
+describe('scoped appearance persistence', () => {
+  it('loads pre-appearance settings without changing a selected protocol, credentials or notes', async () => {
+    const original = makeStore();
+    await original.init();
+    await original.saveSettings({
+      ...original.getSettings(),
+      provider: 'compatible',
+      endpoint: 'https://provider.example/v1',
+      requestProtocol: 'responses',
+      model: 'configured-model',
+      apiKey: 'keep-existing-key',
+      targetLanguage: 'Deutsch',
+    });
+    const entry = await original.add(analysis, original.getSettings());
+    const entryDirectory = path.join(original.getLibraryDirectory(), 'entries');
+    const notePath = path.join(entryDirectory, (await fs.readdir(entryDirectory))[0]);
+    await fs.appendFile(notePath, '\nMy existing learning annotation.\n');
+    const note = await fs.readFile(notePath, 'utf8');
+    const settingsPath = path.join(directory, 'settings.json');
+    const saved = JSON.parse(await fs.readFile(settingsPath, 'utf8'));
+    delete saved.settings.theme;
+    delete saved.settings.fontSize;
+    await fs.writeFile(settingsPath, JSON.stringify(saved));
+
+    const migrated = makeStore();
+    await migrated.init();
+    expect(migrated.getAppearance()).toEqual({ theme: 'forest', fontSize: 'large' });
+    expect(migrated.getSettings()).toMatchObject({
+      requestProtocol: 'responses',
+      provider: 'compatible',
+      endpoint: 'https://provider.example/v1',
+      model: 'configured-model',
+      targetLanguage: 'Deutsch',
+      hasApiKey: true,
+      apiKey: '',
+    });
+    expect(migrated.getProviderSettings().apiKey).toBe('keep-existing-key');
+    expect(migrated.list()).toEqual([entry]);
+    expect(await fs.readFile(notePath, 'utf8')).toBe(note);
+  });
+
+  it('persists scoped appearance across restart and returns detached appearance values', async () => {
+    const store = makeStore();
+    await store.init();
+    expect(store.getAppearance()).toEqual({ theme: 'forest', fontSize: 'large' });
+    const saved = await store.saveAppearance({ theme: 'system', fontSize: 'extra-large' });
+    expect(saved).toEqual({ theme: 'system', fontSize: 'extra-large' });
+    saved.theme = 'forest';
+    expect(store.getAppearance().theme).toBe('system');
+    const restarted = makeStore();
+    await restarted.init();
+    expect(restarted.getAppearance()).toEqual({ theme: 'system', fontSize: 'extra-large' });
+    expect(restarted.getSettings()).toMatchObject({ theme: 'system', fontSize: 'extra-large' });
+  });
+
+  it('rejects invalid or incomplete appearance payloads without writing settings', async () => {
+    const store = makeStore();
+    await store.init();
+    const settingsPath = path.join(directory, 'settings.json');
+    const before = await fs.readFile(settingsPath, 'utf8');
+    const writes = vi.spyOn(fs, 'open');
+    for (const value of [
+      null,
+      [],
+      {},
+      { theme: 'unknown', fontSize: 'large' },
+      { theme: 'forest', fontSize: 'huge' },
+      { theme: 'ocean' },
+      { fontSize: 'large' },
+      { theme: 'lavender', fontSize: 'standard', apiKey: 'not-an-appearance-field' },
+    ]) {
+      await expect(store.saveAppearance(value as AppearanceSettings)).rejects.toThrow(
+        '外观设置无效',
+      );
+    }
+    expect(writes).not.toHaveBeenCalled();
+    expect(await fs.readFile(settingsPath, 'utf8')).toBe(before);
+    expect(store.getAppearance()).toEqual({ theme: 'forest', fontSize: 'large' });
+  });
+
+  it('writes only settings, preserving provider credentials and all Markdown/library files', async () => {
+    const store = makeStore();
+    await store.init();
+    await store.saveSettings({
+      ...store.getSettings(),
+      provider: 'compatible',
+      endpoint: 'https://provider.example/v1',
+      requestProtocol: 'responses',
+      apiKey: 'keep-this-encrypted',
+      model: 'configured-model',
+    });
+    await store.add(analysis, store.getSettings());
+    const entryDirectory = path.join(store.getLibraryDirectory(), 'entries');
+    const paths = [
+      path.join(store.getLibraryDirectory(), 'index.md'),
+      path.join(entryDirectory, (await fs.readdir(entryDirectory))[0]),
+      path.join(directory, 'library.json'),
+    ];
+    const contents = await Promise.all(paths.map((filename) => fs.readFile(filename, 'utf8')));
+    const fixedTime = new Date('2001-01-01T00:00:00.000Z');
+    await Promise.all(paths.map((filename) => fs.utimes(filename, fixedTime, fixedTime)));
+    const previousSettings = store.getProviderSettings();
+    const previousEntries = store.list();
+    await store.saveAppearance({ theme: 'midnight', fontSize: 'extra-large' });
+
+    expect(store.getProviderSettings()).toEqual({
+      ...previousSettings,
+      theme: 'midnight',
+      fontSize: 'extra-large',
+    });
+    expect(store.list()).toEqual(previousEntries);
+    expect(await Promise.all(paths.map((filename) => fs.readFile(filename, 'utf8')))).toEqual(
+      contents,
+    );
+    expect(
+      await Promise.all(paths.map(async (filename) => (await fs.stat(filename)).mtimeMs)),
+    ).toEqual(paths.map(() => fixedTime.getTime()));
+    const persisted = await fs.readFile(path.join(directory, 'settings.json'), 'utf8');
+    expect(persisted).not.toContain('keep-this-encrypted');
+    expect(JSON.parse(persisted).credentials).toEqual({
+      'compatible:https://provider.example/v1': protect('keep-this-encrypted'),
+    });
+  });
+
+  it('merges both save APIs inside the queue so stale full settings cannot revert appearance', async () => {
+    const store = makeStore();
+    await store.init();
+    await store.saveSettings({ ...store.getSettings(), apiKey: 'retained-key' });
+    const staleDraft = store.getSettings();
+    const [firstSettings, firstAppearance, staleSave, lastAppearance] = await Promise.all([
+      store.saveSettings({ ...staleDraft, model: 'model-before-theme' }),
+      store.saveAppearance({ theme: 'midnight', fontSize: 'extra-large' }),
+      store.saveSettings({
+        ...staleDraft,
+        model: 'model-after-theme',
+        theme: 'forest',
+        fontSize: 'standard',
+      }),
+      store.saveAppearance({ theme: 'ocean', fontSize: 'large' }),
+    ]);
+    expect(firstSettings.model).toBe('model-before-theme');
+    expect(firstAppearance).toEqual({ theme: 'midnight', fontSize: 'extra-large' });
+    expect(staleSave).toMatchObject({
+      model: 'model-after-theme',
+      theme: 'midnight',
+      fontSize: 'extra-large',
+    });
+    expect(lastAppearance).toEqual({ theme: 'ocean', fontSize: 'large' });
+    expect(store.getProviderSettings()).toMatchObject({
+      model: 'model-after-theme',
+      apiKey: 'retained-key',
+      theme: 'ocean',
+      fontSize: 'large',
+    });
+
+    await store.saveSettings({ ...store.getSettings(), theme: 'lavender', fontSize: 'standard' });
+    expect(store.getAppearance()).toEqual({ theme: 'ocean', fontSize: 'large' });
+    const restarted = makeStore();
+    await restarted.init();
+    expect(restarted.getAppearance()).toEqual({ theme: 'ocean', fontSize: 'large' });
+    expect(restarted.getProviderSettings().model).toBe('model-after-theme');
+  });
+
+  it('leaves the last saved appearance intact after a failed atomic write and permits retry', async () => {
+    const store = makeStore();
+    await store.init();
+    const settingsPath = path.join(directory, 'settings.json');
+    const before = await fs.readFile(settingsPath, 'utf8');
+    vi.spyOn(fs, 'rename').mockRejectedValueOnce(
+      Object.assign(new Error('write denied'), { code: 'EACCES' }),
+    );
+    await expect(
+      store.saveAppearance({ theme: 'lavender', fontSize: 'standard' }),
+    ).rejects.toThrow();
+    expect(store.getAppearance()).toEqual({ theme: 'forest', fontSize: 'large' });
+    expect(await fs.readFile(settingsPath, 'utf8')).toBe(before);
+    await expect(
+      store.saveAppearance({ theme: 'lavender', fontSize: 'standard' }),
+    ).resolves.toEqual({ theme: 'lavender', fontSize: 'standard' });
   });
 });
