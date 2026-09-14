@@ -1,33 +1,35 @@
 # LingoLeaf · 语叶
 
+**English** | [简体中文](README.zh-CN.md)
+
 **Turn everyday sentences into lasting language skills.**
 
-一个为 Windows 设计的英语学习伴侣。选中一句话，用快捷键纠错或翻译，把日常遇到的表达变成自己的学习积累。
+An English-learning companion for Windows. Select a sentence, check its grammar or translate it with a keyboard shortcut, and turn everyday expressions into your own learning library.
 
-## 日常怎么用
+## Everyday use
 
-1. 打开「设置」，选择 OpenAI、OpenAI 兼容接口、Anthropic、Azure OpenAI 或 Ollama，填写地址、模型和密钥，点击测试并保存。
-2. 在其他应用选中文字，按 **Ctrl + Shift + G**。弹窗显示语法判断、具体错误片段、规则解释和新例句。表达建议与语法错误分开标明。
-3. 按 **Ctrl + Shift + T**，将选中文字译成设置中的目标语言。默认在可验证的可编辑选区自动替换；原窗口、选区已改变时取消替换，可以在结果中复制译文。快捷键可修改。
-4. 在「学习库」搜索句子，在「复习」先回忆、再揭晓答案，按记忆程度安排下一次复习。
-5. 在「手机同步」启动连接，用手机扫描二维码。手机与电脑连接同一个可信网络时，复习进度直接保存到桌面。
+1. Open Preferences (偏好设置), choose OpenAI, an OpenAI-compatible service, Anthropic, Azure OpenAI, or Ollama, and enter your endpoint, model, and API key. Test the connection and save.
+2. Select text in another application and press **Ctrl + Shift + G**. A popup shows whether the sentence is grammatically correct, highlights specific errors, and explains the rules with new examples. Style suggestions are labeled separately from grammar errors.
+3. Press **Ctrl + Shift + T** to translate the selected text into your configured target language. By default, LingoLeaf replaces the selection when it can verify an editable text range. If the original window or selection has changed, replacement is canceled and you can copy the translation from the result. Both shortcuts are customizable.
+4. Search your sentences in the Learning Library. In Review, recall the answer before revealing it, then rate how well you remembered it to schedule your next review.
+5. Start a connection under Mobile Sync and scan the QR code with your phone. When both devices are on the same trusted network, mobile review progress is saved directly to the desktop library.
 
-关闭窗口会收起到系统托盘；右键托盘图标可完全退出。只有触发快捷键或点击分析时才读取并处理输入，不监听日常键入。
+Closing the window minimizes the app to the system tray. Right-click the tray icon to quit completely. LingoLeaf reads and processes input only when you trigger a shortcut or click Analyze; it does not monitor everyday typing.
 
-## 获取与开发
+## Download and development
 
-当前版本：**v0.2.0 预览版**。从 [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases) 下载 Windows x64 免安装程序，启动后先配置自己的模型接口。
+Current version: **v0.2.0 preview**. Download the portable Windows x64 executable from [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases), then configure your own model service after launching it.
 
 [![Windows checks](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml)
 
-Windows 10 / 11，x64。原生桥使用系统自带的 Windows PowerShell 5.1、.NET Framework 和 UI Automation，无需另装 .NET SDK。桌面框架为 Electron，界面为 React + TypeScript。
+Requires Windows 10 or 11, x64. The native bridge uses the built-in Windows PowerShell 5.1, .NET Framework, and UI Automation; no additional .NET SDK is required. The desktop app uses Electron with a React + TypeScript interface. Development requires Node.js 22 or later.
 
 ```powershell
 npm ci
 npm run dev
 ```
 
-构建、测试和生成免安装版：
+Test, build, and package the portable app:
 
 ```powershell
 npm test
@@ -35,63 +37,63 @@ npm run build
 npm run package
 ```
 
-生成的 Windows 可执行文件在 `release/`。目前构建不包含代码签名。发布前应自行签名，并在目标 Windows 环境检查安全提示。不要提交运行数据或密钥。
+The Windows executable is generated in `release/`. Builds currently do not include code signing. If you distribute your own build, sign it and check security prompts on the target Windows environment before release. Do not commit runtime data or API keys.
 
-## 外观与阅读
+## Appearance and readability
 
-在「偏好设置」最上方的「外观与阅读」中选择 **松林米白、晴空蓝白、雾紫、午夜深色**，或让明暗主题跟随 Windows 系统。主题覆盖主界面、表单、学习卡片、应用内对话框和划词结果弹窗。
+At the top of Preferences (偏好设置), open Appearance and Reading (外观与阅读) to choose **Forest Cream (松林米白), Sky Blue (晴空蓝白), Lavender (雾紫), or Midnight Dark (午夜深色)**, or follow the Windows light/dark setting. Themes apply to the main interface, forms, learning cards, in-app dialogs, and selection result popups.
 
-文字提供 **标准 / 大号 / 特大** 三档，正文基准分别为 16 / 18 / 20px，默认大号。说明、标签和按钮使用各自的易读字号；窗口较小时会重新排列并滚动，避免放大文字后挤掉操作按钮。
+Text sizes are **Standard / Large / Extra Large**, with body text baselines of 16 / 18 / 20px. Large is the default. Descriptions, labels, and buttons use their own readable sizes. Smaller windows reflow and scroll to keep actions accessible when text is enlarged.
 
-点击后即时生效并独立保存，不需要点击模型设置的「保存设置」，也不会提交或覆盖尚未保存的接口修改。已打开的划词弹窗会跟随更新，重新打开应用仍保留选择。升级会保留原模型设置、密钥和学习库。
+Appearance changes take effect immediately and save independently. You do not need to click the model settings' Save button, and unsaved API configuration edits are preserved. Open result popups update as well, and your choices persist after restarting the app. Upgrading preserves your model settings, API keys, and learning library.
 
-## 接口配置
+## API configuration
 
-| 服务 | 地址示例 | 模型栏 |
+| Service | Example endpoint | Model field |
 | --- | --- | --- |
-| OpenAI | `https://api.openai.com/v1` | 有权访问的模型名 |
-| OpenAI 兼容 | 服务商给出的完整 Base URL，例如 `https://example.com/v1` | 服务商模型名 |
-| Copilot Bridge | `http://localhost:8765/codex`；协议选 Responses 或自动 | 例如 `gpt-6-astra` |
-| LM Studio | `http://127.0.0.1:1234/v1` | 本地已加载模型名 |
-| Anthropic | `https://api.anthropic.com/v1` | 有权访问的 Claude 模型名 |
-| Azure OpenAI | `https://YOUR-RESOURCE.openai.azure.com` | **部署名称**；API 版本可配置 |
-| Ollama | `http://127.0.0.1:11434` | 已下载的模型名，例如 `qwen3:8b` |
+| OpenAI | `https://api.openai.com/v1` | A model your account can access |
+| OpenAI-compatible | The base URL provided by the service, such as `https://example.com/v1` | The service's model name |
+| LM Studio (select OpenAI-compatible) | `http://127.0.0.1:1234/v1` | The name of a locally loaded model |
+| Anthropic | `https://api.anthropic.com/v1` | A Claude model your account can access |
+| Azure OpenAI | `https://YOUR-RESOURCE.openai.azure.com` | **Deployment name**; the API version is configurable |
+| Ollama | `http://127.0.0.1:11434` | A downloaded model name, such as `qwen3:8b` |
 
-模型必须能遵循 JSON 输出指令。OpenAI 和兼容接口支持 **Chat Completions / Responses**：自动模式识别完整 `/responses` 地址，或在 Chat 路由返回 404/405 时尝试一次同源 Responses；认证、限流、生成失败和断流不会触发重复请求。也可以手动指定协议。Responses 同时支持 JSON 和 SSE 返回，并且只接受完整生成结果。Anthropic 走 Messages，Ollama 走原生 `/api/chat`，Azure 保持传统部署 Chat Completions 协议。服务商模型权限和计费由用户自己的账户决定；软件没有内置共享 API Key。
+OpenAI and OpenAI-compatible services support **Chat Completions / Responses**. In Request Protocol (请求协议), choose Auto or select a protocol explicitly. If your service requires Responses, select Responses and enter its base URL, or enter the full endpoint ending in `/responses`, such as `https://example.com/v1/responses`. Responses supports both JSON and SSE responses.
 
-[Copilot Bridge 文档](https://github.com/hooyao/copilot-bridge#point-codex-at-the-bridge) 的 `/codex` 入口使用 Responses 协议。v0.1.0 只支持 Chat Completions，连接该入口会返回 404；请升级到 v0.1.1，无需修改 Bridge 配置。旧设置、密钥和学习笔记会保留。
+Anthropic uses Messages, Ollama uses its native `/api/chat` endpoint, and Azure OpenAI uses deployment-based Chat Completions.
 
-远程 API 使用 HTTPS，本机环回地址可用 HTTP。自托管的远程服务请配置 HTTPS。API Key 由 Electron `safeStorage` 在 Windows 用户上下文加密保存，渲染界面读不到已保存的明文密钥，也不会写进 Markdown、移动页面或导出文件。
+Models must follow JSON output instructions. Enter the API key required by your chosen service; local compatible endpoints or Ollama instances that do not require authentication can leave it blank. Model access and billing are managed through your own provider account. LingoLeaf does not include a shared API key.
 
-OpenAI 协议参考：[Chat Completions API](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)。
-Responses 参考：[Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create)。
+Remote APIs require HTTPS; local loopback endpoints may use HTTP. Configure HTTPS for remote self-hosted services. API keys are encrypted with Electron `safeStorage` under your Windows user account. Saved plaintext keys are unavailable to the renderer and are not written to Markdown notes, mobile pages, or exports.
 
-## 学习库与手机
+Protocol references: [Chat Completions API](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create) · [Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create).
 
-「设置 → 学习库目录」可选择现有 Obsidian vault、OneDrive 等同步文件夹。应用创建：
+## Learning library and mobile access
+
+Under Preferences → Learning notes folder, choose an existing Obsidian vault or a synced folder such as OneDrive. The app creates:
 
 ```text
-所选文件夹/
+selected-folder/
 └─ LingoLeaf/
-   ├─ index.md            # 按复习时间整理的学习索引
+   ├─ index.md            # Learning index organized by review time
    └─ entries/
-      └─ 日期-UUID.md     # 每句的原文、答案、解析、练习和个人批注
+      └─ date-UUID.md     # Original sentence, answer, explanation, practice, and personal notes
 ```
 
-每条 Markdown 笔记创建后不覆盖，方便自己添加批注；索引由应用更新。电脑中的 `library.json` 是复习进度的权威来源。Markdown 文件夹同步供手机阅读和批注，**不会把 Markdown 修改自动导入复习进度**。手机扫码复习则直接写回同一桌面学习库，避免双端进度冲突。
+Individual Markdown notes are not overwritten after creation, so you can add your own annotations. The app updates the index. The desktop `library.json` is the authoritative source for review progress. Syncing the Markdown folder lets you read and annotate notes on your phone, but **Markdown edits are not automatically imported into review progress**. Reviewing through the QR connection writes directly to the same desktop library, avoiding conflicting progress on two devices.
 
-扫码连接仅在你主动开启时运行；每次重新启动生成新的配对凭证，关闭连接立即撤销。连接为局域网 HTTP，请只在可信家庭网络使用。二维码代表访问学习库与提交复习的权限，请勿公开。首次启用如 Windows 防火墙询问，请自行决定是否允许专用网络访问。电脑必须保持运行；跨网离线阅读请使用你的文件同步工具。
+The mobile connection runs only when you enable it. Each restart creates new pairing credentials, and stopping the connection immediately revokes access. The connection uses HTTP over your local network; use it only on a trusted home network. The QR code grants permission to access the library and submit reviews, so do not share it publicly. If Windows Firewall prompts you on first use, decide whether to allow access on private networks. Your computer must stay running. For offline reading or access from another network, use your own file sync tool.
 
-学习采用透明的间隔复习：忘记后很快重试，记住后逐步延长间隔。它是辅助练习计划，不代表对记忆能力的精确测量。
+Learning uses transparent spaced repetition: forgotten material returns soon, while remembered material receives gradually longer review intervals. This is a practice schedule, not a precise measurement of memory ability.
 
-## 能力边界
+## Limitations
 
-- 标准编辑框、记事本以及支持 UI Automation 选区的应用可进行安全替换。PDF、只读网页、自绘编辑器或部分终端可能只能提取 / 复制；权限更高的应用可能无法访问。
-- 密码字段不读取。没有选区时不会把旧剪贴板误当成新选中的文字。
-- 原生桥优先读取 UI Automation，必要时临时复制选区，尽力保留原剪贴板；遇到无法安全备份的特殊格式会拒绝该回退。结果不会跨应用盲目粘贴。
-- LLM 仍可能理解错误。弹窗保留原句及解释，翻译自动替换可在设置中关闭；编辑器通常支持 Ctrl + Z 撤销粘贴。
-- 未配置可用模型前，界面和学习库可启动，但真实翻译 / 纠错需要完成接口配置。
+- Standard text fields, Notepad, and applications that expose selections through UI Automation can support safe replacement. PDFs, read-only web pages, custom editors, and some terminals may support only extraction or copying. Applications running with higher privileges may be inaccessible.
+- Password fields are not read. When there is no selection, old clipboard content is not treated as newly selected text.
+- The native bridge prefers UI Automation. When necessary, it temporarily copies the selection while making a best effort to preserve the clipboard. It refuses this fallback for special formats it cannot safely back up. Results are not pasted blindly across applications.
+- LLMs can still misunderstand text. Popups retain the original sentence and explanation. You can disable automatic translation replacement in Preferences; editors usually support **Ctrl + Z** to undo a paste.
+- The interface and learning library can open before a working model is configured, but translation and grammar checking require a usable API configuration.
 
-## 开源协作
+## Contributing and license
 
-MIT License。贡献方式见 [CONTRIBUTING.md](CONTRIBUTING.md)，架构见 [docs/architecture.md](docs/architecture.md)，验证范围见 [docs/verification.md](docs/verification.md)。
+MIT License. See [CONTRIBUTING.md](CONTRIBUTING.md) for contributions, [docs/architecture.md](docs/architecture.md) for the architecture, and [docs/verification.md](docs/verification.md) for validation coverage.
