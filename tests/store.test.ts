@@ -16,6 +16,8 @@ const analysis: Analysis = {
   mode: 'grammar',
   original: 'She go to school.',
   corrected: 'She goes to school.',
+  translation: '她去上学。',
+  translationLanguage: '简体中文',
   isCorrect: false,
   explanation: '主语为第三人称单数。',
   issues: [
@@ -98,6 +100,7 @@ describe('learning storage', () => {
     );
     expect(note).toContain('She go to school.');
     expect(note).toContain('She goes to school.');
+    expect(note).toContain('## 译文 · 简体中文\n\n```text\n她去上学。\n```');
     expect(note).toContain('主谓一致');
     expect(note).toContain('主动练习');
     expect(restarted.getSyncError()).toBeNull();
@@ -116,6 +119,62 @@ describe('learning storage', () => {
     await store.saveSettings({ ...store.getSettings(), clearApiKey: true });
     expect(store.getProviderSettings().apiKey).toBe('');
     expect(store.getSettings()).not.toHaveProperty('clearApiKey');
+  });
+  it('loads legacy grammar notes without a translation and preserves their annotations', async () => {
+    const { translation: _translation, translationLanguage: _language, ...legacy } = analysis;
+    const store = makeStore();
+    await store.init();
+    const entry = await store.add(legacy, store.getSettings());
+    const entryDir = path.join(store.getLibraryDirectory(), 'entries');
+    const notePath = path.join(entryDir, (await fs.readdir(entryDir))[0]);
+    await fs.appendFile(notePath, '\nMy original annotation must survive.\n');
+    const originalNote = await fs.readFile(notePath, 'utf8');
+    expect(originalNote).not.toContain('## 译文');
+
+    const restarted = makeStore();
+    await restarted.init();
+    expect(restarted.list()).toEqual([entry]);
+    expect(restarted.list()[0]).not.toHaveProperty('translation');
+    expect(restarted.list()[0]).not.toHaveProperty('translationLanguage');
+    await restarted.rate(entry.id, 'good');
+    expect(await fs.readFile(notePath, 'utf8')).toBe(originalNote);
+  });
+  it('persists a formatted grammar translation with the request settings language across later changes', async () => {
+    const store = makeStore();
+    await store.init();
+    const translation = '每日计划：\n\n1. 她去上学。\n   - 她学习英语。';
+    const entry = await store.add(
+      { ...analysis, translation, translationLanguage: 'untrusted-model-language' },
+      store.getSettings(),
+    );
+    expect(entry.translationLanguage).toBe('简体中文');
+    expect(entry.translation).toBe(translation);
+    expect(entry.corrected).toBe(analysis.corrected);
+    await store.saveSettings({ ...store.getSettings(), explanationLanguage: '日本語' });
+
+    const restarted = makeStore();
+    await restarted.init();
+    expect(restarted.list()[0]).toMatchObject({ translation, translationLanguage: '简体中文' });
+    const markdown = renderEntryMarkdown(restarted.list()[0]);
+    expect(markdown).toContain(`## 译文 · 简体中文\n\n\`\`\`text\n${translation}\n\`\`\``);
+    const entryDir = path.join(restarted.getLibraryDirectory(), 'entries');
+    expect(await fs.readFile(path.join(entryDir, (await fs.readdir(entryDir))[0]), 'utf8')).toBe(
+      markdown,
+    );
+  });
+  it('keeps translation-mode notes to their intended translation without a second language section', async () => {
+    const store = makeStore();
+    await store.init();
+    const entry = await store.add(
+      { ...analysis, mode: 'translate', original: '她去上学。', isCorrect: true, issues: [] },
+      store.getSettings(),
+    );
+    expect(entry.corrected).toBe(analysis.corrected);
+    expect(entry).not.toHaveProperty('translation');
+    expect(entry).not.toHaveProperty('translationLanguage');
+    const markdown = renderEntryMarkdown(entry);
+    expect(markdown.match(/## 译文/g)).toHaveLength(1);
+    expect(markdown).not.toContain('## 译文 ·');
   });
   it('serializes parallel app/mobile updates without losing cards or review ratings', async () => {
     const store = makeStore();
@@ -238,6 +297,7 @@ describe('learning storage', () => {
       {
         ...analysis,
         original: '```\n<script>alert(1)</script>\n[link](evil)',
+        translation: '```\n<img src=x onerror=alert(1)>\n[译文](javascript:evil)',
         explanation: '<script>alert(1)</script> [click](javascript:evil)',
         tags: ['[evil](javascript:evil)'],
       },
@@ -245,6 +305,7 @@ describe('learning storage', () => {
     );
     const markdown = renderEntryMarkdown(entry);
     expect(markdown).toContain('````text\n```');
+    expect(markdown).toContain('````text\n```\n<img src=x onerror=alert(1)>\n[译文](javascript:evil)\n````');
     expect(markdown).toContain('&lt;script&gt;');
     expect(markdown).toContain('\\[click\\]\\(javascript:evil\\)');
   });

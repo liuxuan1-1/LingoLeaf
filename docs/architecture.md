@@ -18,6 +18,8 @@ The Windows helper is a long-lived, hidden PowerShell 5.1 process compiling the 
 
 Settings and learning JSON are stored under Electron's `userData` directory. API keys are scoped to provider plus endpoint and encrypted using Windows-backed `safeStorage`. JSON writes use temp files, flush and atomic rename, with in-process serialization preventing lost updates.
 
+Grammar analysis requests a full translation of the corrected text into the explanation language in the same model response. New grammar responses require a nonempty `translation`; `translationLanguage` comes from the request's local settings. Both fields are optional in stored entries for compatibility with older libraries. Translation mode continues to use `corrected` alone. Renderers display all sentence content as literal text with preserved spacing, without interpreting it as HTML or Markdown.
+
 Markdown is a portable learning mirror, not the transactional database. Per-entry files preserve personal annotations; the generated index links to entries and due dates. Directory failures retain the local record and surface a sync error. Moving the configured mirror does not delete the old directory.
 
 Reviews use an auditable SM-2-inspired scheduler in `src/shared/scheduler.ts`. An initial entry is due immediately. A rating updates its interval, ease, repetition count and due date in one serialized transaction.

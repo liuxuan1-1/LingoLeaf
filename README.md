@@ -9,7 +9,7 @@ An English-learning companion for Windows. Select a sentence, check its grammar 
 ## Everyday use
 
 1. Open Preferences (偏好设置), choose OpenAI, an OpenAI-compatible service, Anthropic, Azure OpenAI, or Ollama, and enter your endpoint, model, and API key. Test the connection and save.
-2. Select text in another application and press **Ctrl + Shift + G**. A popup shows whether the sentence is grammatically correct, highlights specific errors, and explains the rules with new examples. Style suggestions are labeled separately from grammar errors.
+2. Select text in another application and press **Ctrl + Shift + G**. A popup shows whether the sentence is grammatically correct, highlights specific errors, and explains the rules with new examples. It also translates the corrected text into your configured explanation language, with a separate copy button for that translation. Style suggestions are labeled separately from grammar errors.
 3. Press **Ctrl + Shift + T** to translate the selected text into your configured target language. By default, LingoLeaf replaces the selection when it can verify an editable text range. If the original window or selection has changed, replacement is canceled and you can copy the translation from the result. Both shortcuts are customizable.
 4. Search your sentences in the Learning Library. In Review, recall the answer before revealing it, then rate how well you remembered it to schedule your next review.
 5. Start a connection under Mobile Sync and scan the QR code with your phone. When both devices are on the same trusted network, mobile review progress is saved directly to the desktop library.
@@ -18,7 +18,7 @@ Closing the window minimizes the app to the system tray. Right-click the tray ic
 
 ## Download and development
 
-Current version: **v0.2.0 preview**. Download the portable Windows x64 executable from [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases), then configure your own model service after launching it.
+Current version: **v0.2.1 preview**. Download the portable Windows x64 executable from [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases), then configure your own model service after launching it.
 
 [![Windows checks](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml)
 
@@ -44,6 +44,8 @@ The Windows executable is generated in `release/`. Builds currently do not inclu
 At the top of Preferences (偏好设置), open Appearance and Reading (外观与阅读) to choose **Forest Cream (松林米白), Sky Blue (晴空蓝白), Lavender (雾紫), or Midnight Dark (午夜深色)**, or follow the Windows light/dark setting. Themes apply to the main interface, forms, learning cards, in-app dialogs, and selection result popups.
 
 Text sizes are **Standard / Large / Extra Large**, with body text baselines of 16 / 18 / 20px. Large is the default. Descriptions, labels, and buttons use their own readable sizes. Smaller windows reflow and scroll to keep actions accessible when text is enlarged.
+
+Text selections use a distinct highlight in every theme. Original text, suggested expressions, and translations retain paragraph breaks, blank lines, and indentation when displayed. Copy and Replace use the original plain text of the result.
 
 Appearance changes take effect immediately and save independently. You do not need to click the model settings' Save button, and unsaved API configuration edits are preserved. Open result popups update as well, and your choices persist after restarting the app. Upgrading preserves your model settings, API keys, and learning library.
 
@@ -81,6 +83,8 @@ selected-folder/
 ```
 
 Individual Markdown notes are not overwritten after creation, so you can add your own annotations. The app updates the index. The desktop `library.json` is the authoritative source for review progress. Syncing the Markdown folder lets you read and annotate notes on your phone, but **Markdown edits are not automatically imported into review progress**. Reviewing through the QR connection writes directly to the same desktop library, avoiding conflicting progress on two devices.
+
+New grammar notes include the corrected text's translation and its explanation language. These are available in the desktop library, Markdown notes, and mobile review. Older notes stay readable; analyze the original text again to create a new note with a translation. Changing your explanation language does not relabel historical translations.
 
 The mobile connection runs only when you enable it. Each restart creates new pairing credentials, and stopping the connection immediately revokes access. The connection uses HTTP over your local network; use it only on a trusted home network. The QR code grants permission to access the library and submit reviews, so do not share it publicly. If Windows Firewall prompts you on first use, decide whether to allow access on private networks. Your computer must stay running. For offline reading or access from another network, use your own file sync tool.
 

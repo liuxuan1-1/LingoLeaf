@@ -25,6 +25,7 @@ let captured: {
 }[] = [];
 const good = {
   corrected: 'She goes to school every day.',
+  translation: '她每天都去上学。',
   isCorrect: true,
   explanation: '主谓一致正确。',
   issues: [],
@@ -118,6 +119,8 @@ describe('provider HTTP adapters', () => {
     const result = await analyzeText('She go to school every day.', 'grammar', config());
     expect(result.isCorrect).toBe(false);
     expect(result.issues[0].rule).toBe('主谓一致');
+    expect(result.translation).toBe('她每天都去上学。');
+    expect(result.translationLanguage).toBe('简体中文');
     expect(captured[0].url).toBe('/v1/chat/completions');
     expect(captured[0].headers.authorization).toBe('Bearer fake-secret-test-key');
     expect(captured[0].body.response_format).toEqual({ type: 'json_object' });
@@ -172,8 +175,9 @@ describe('provider HTTP adapters', () => {
     expect(captured[0].headers.authorization).toBeUndefined();
   });
   it('translates the selected question instead of answering and retains source identity', async () => {
+    const { translation: _translation, ...translationOutput } = good;
     payload = envelope({
-      ...good,
+      ...translationOutput,
       corrected: "What's the weather like today?",
       explanation: '询问天气使用 What is ... like。',
     });
@@ -184,6 +188,10 @@ describe('provider HTTP adapters', () => {
     expect(result.original).toBe('今天天气怎么样');
     expect(result.corrected).toBe("What's the weather like today?");
     expect(result.mode).toBe('translate');
+    expect(result).not.toHaveProperty('translation');
+    expect(result).not.toHaveProperty('translationLanguage');
+    expect(captured).toHaveLength(1);
+    expect(captured[0].body.messages[0].content).not.toContain('"translation":');
     expect(captured[0].body.messages[0].content).toContain('do not answer it');
     expect(captured[0].body.messages[0].content).toContain('English');
   });
@@ -192,6 +200,7 @@ describe('provider HTTP adapters', () => {
     payload = envelope({
       ...good,
       corrected: 'I am delighted.',
+      translation: '我很高兴。',
       issues: [
         {
           original: 'very happy',
@@ -202,7 +211,33 @@ describe('provider HTTP adapters', () => {
         },
       ],
     });
-    expect((await analyzeText(text, 'grammar', config())).corrected).toBe(text);
+    const result = await analyzeText(text, 'grammar', config());
+    expect(result.corrected).toBe(text);
+    expect(result.translation).toBe('我很高兴。');
+  });
+  it('translates the complete corrected text into the explanation language and preserves layout', async () => {
+    const original = 'Daily plan:\r\n\r\n1. She go to school every day.\r\n   - She studies English.';
+    const corrected = original.replace('She go', 'She goes');
+    const translation = '毎日の予定：\r\n\r\n1. 彼女は毎日学校に行きます。\r\n   - 彼女は英語を勉強します。';
+    payload = envelope({ ...incorrect, corrected, translation });
+    const result = await analyzeText(original, 'grammar', {
+      ...config(),
+      explanationLanguage: '日本語',
+      targetLanguage: 'Deutsch',
+    });
+    expect(result).toMatchObject({ original, corrected, translation, translationLanguage: '日本語' });
+    expect(captured).toHaveLength(1);
+    expect(captured[0].body.messages[0].content).toContain('entire corrected text into "日本語"');
+    expect(captured[0].body.messages[0].content).toContain('paragraph breaks, blank lines, list markers');
+    expect(captured[0].body.messages[0].content).not.toContain('Deutsch');
+  });
+  it('does not retain an unsolicited second translation in translation mode', async () => {
+    payload = envelope(good);
+    const result = await analyzeText('她每天都去上学。', 'translate', config());
+    expect(result.corrected).toBe(good.corrected);
+    expect(result).not.toHaveProperty('translation');
+    expect(result).not.toHaveProperty('translationLanguage');
+    expect(captured).toHaveLength(1);
   });
   it('runs an actual structured-content check when testing a connection', async () => {
     payload = envelope(good);
@@ -212,6 +247,26 @@ describe('provider HTTP adapters', () => {
 });
 
 describe('provider validation and safe errors', () => {
+  it.each([undefined, '', ' \r\n\t', null, 42])(
+    'rejects missing or blank grammar translations without making another model request %#',
+    async (translation) => {
+      payload = envelope({ ...good, translation });
+      await expect(analyzeText(good.corrected, 'grammar', config())).rejects.toThrow(
+        '未返回讲解语言的完整译文',
+      );
+      expect(captured).toHaveLength(1);
+    },
+  );
+  it('rejects an oversized grammar translation without requesting a replacement', async () => {
+    payload = envelope({ ...good, translation: '文'.repeat(24001) });
+    await expect(analyzeText(good.corrected, 'grammar', config())).rejects.toThrow('格式');
+    expect(captured).toHaveLength(1);
+  });
+  it('does not accept translation language metadata supplied by the model', async () => {
+    payload = envelope({ ...good, translationLanguage: 'untrusted-model-language' });
+    await expect(analyzeText(good.corrected, 'grammar', config())).rejects.toThrow('格式');
+    expect(captured).toHaveLength(1);
+  });
   it.each([
     {},
     { ...good, isCorrect: false },
@@ -300,6 +355,8 @@ describe('Responses protocol routing', () => {
       requestProtocol: 'responses',
     });
     expect(result.corrected).toBe(incorrect.corrected);
+    expect(result.translation).toBe(incorrect.translation);
+    expect(result.translationLanguage).toBe('简体中文');
     const request = captured[0];
     expect(request.url).toBe('/v1/responses');
     expect(request.headers.authorization).toBe('Bearer fake-secret-test-key');
@@ -414,7 +471,7 @@ describe('Responses protocol routing', () => {
     expect(captured).toHaveLength(1);
   });
   it('does not retry a model call after malformed learning output', async () => {
-    payload = envelope({ corrected: 'incomplete data' });
+    payload = envelope({ corrected: 'incomplete data', translation: '不完整的数据' });
     await expect(
       analyzeText(good.corrected, 'grammar', {
         ...config('compatible'),

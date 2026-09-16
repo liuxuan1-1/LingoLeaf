@@ -109,7 +109,11 @@ export function ReviewPage({
               </div>
               <div className="recall-sentence">
                 <span className="quote-mark">“</span>
-                <p>{current.original}</p>
+                <p
+                  className={`text-content${/[\r\n]/.test(current.original) ? ' text-multiline' : ''}`}
+                >
+                  {current.original}
+                </p>
               </div>
               {revealed ? (
                 <div className="revealed-answer">

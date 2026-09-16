@@ -391,10 +391,13 @@ function setupIPC() {
     if (result.canceled || !result.filePath) return null;
     const sections = store
       .list()
-      .map(
-        (e) =>
-          `## ${e.createdAt.slice(0, 10)} · ${e.mode === 'grammar' ? '语法纠错' : '翻译'}\n\n原句：\n\n${quote(e.original)}\n\n修改 / 译文：\n\n${quote(e.corrected)}\n\n${quote(e.explanation)}\n\n${e.issues.map((i) => `- **${escapeMd(i.rule)}**：${escapeMd(i.original)} → ${escapeMd(i.replacement)}\n  ${escapeMd(i.explanation)}`).join('\n')}\n\n例句：${escapeMd(e.example)}\n\n下次复习：${e.review.dueAt}\n`,
-      );
+      .map((e) => {
+        const translation =
+          e.mode === 'grammar' && e.translation
+            ? `句意${e.translationLanguage ? ` · ${escapeMd(e.translationLanguage)}` : ''}：\n\n${quote(e.translation)}\n\n`
+            : '';
+        return `## ${e.createdAt.slice(0, 10)} · ${e.mode === 'grammar' ? '语法纠错' : '翻译'}\n\n原句：\n\n${quote(e.original)}\n\n修改 / 译文：\n\n${quote(e.corrected)}\n\n${translation}${quote(e.explanation)}\n\n${e.issues.map((i) => `- **${escapeMd(i.rule)}**：${escapeMd(i.original)} → ${escapeMd(i.replacement)}\n  ${escapeMd(i.explanation)}`).join('\n')}\n\n例句：${escapeMd(e.example)}\n\n下次复习：${e.review.dueAt}\n`;
+      });
     await fs.writeFile(
       result.filePath,
       '# LingoLeaf · 我的语言学习库\n\n' + sections.join('\n---\n\n'),

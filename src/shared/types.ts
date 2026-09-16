@@ -19,6 +19,8 @@ export interface Analysis {
   mode: Mode;
   original: string;
   corrected: string;
+  translation?: string;
+  translationLanguage?: string;
   isCorrect: boolean;
   explanation: string;
   issues: Issue[];

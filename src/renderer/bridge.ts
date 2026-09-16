@@ -3,7 +3,7 @@ import { APPEARANCE_CACHE_KEY, normalizeAppearance } from '../shared/appearance'
 
 export const isPreview = !window.lingo;
 const previewState: AppState = {
-  version: '0.2.0',
+  version: '0.2.1',
   entries: [],
   shortcuts: { grammar: false, translate: false },
   settings: {

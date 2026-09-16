@@ -364,7 +364,11 @@ describe('mobile lifecycle and request boundaries', () => {
       targetLanguage: _target,
       ...analysis
     } = entry;
-    const added = await store.add(analysis, store.getSettings());
+    const translation = '她去学校。\n\n  每天如此。';
+    const added = await store.add(
+      { ...analysis, translation, translationLanguage: '简体中文' },
+      store.getSettings(),
+    );
     const server = new MobileServer(store);
     servers.push(server);
     const status = await server.start('127.0.0.1'),
@@ -377,6 +381,7 @@ describe('mobile lifecycle and request boundaries', () => {
     const text = await state.text();
     expect(text).not.toContain('secret-not-for-phone');
     expect(text).not.toContain('apiKey');
+    expect(JSON.parse(text).entries[0]).toMatchObject({ translation, translationLanguage: '简体中文' });
     const response = await fetch(url.origin + '/api/review', {
       method: 'POST',
       headers,
@@ -385,9 +390,11 @@ describe('mobile lifecycle and request boundaries', () => {
     expect(response.status).toBe(200);
     const reviewed = (await response.json()).entry;
     expect(reviewed.review.repetitions).toBe(1);
+    expect(reviewed).toMatchObject({ translation, translationLanguage: '简体中文' });
     const restarted = new LibraryStore(directory, protect, unprotect);
     await restarted.init();
     expect(restarted.list()[0].review).toEqual(reviewed.review);
+    expect(restarted.list()[0]).toMatchObject({ translation, translationLanguage: '简体中文' });
     expect(await fs.readFile(path.join(store.getLibraryDirectory(), 'index.md'), 'utf8')).toContain(
       reviewed.review.dueAt.slice(0, 16).replace('T', ' '),
     );
@@ -396,5 +403,49 @@ describe('mobile lifecycle and request boundaries', () => {
     const script = MOBILE_HTML.match(/<script>([\s\S]*?)<\/script>/)?.[1];
     expect(script).toBeTruthy();
     expect(() => new Script(script!)).not.toThrow();
+  });
+  it('reveals and searches grammar translations as literal text, without inventing old translations', async () => {
+    const translated = {
+      ...entry,
+      translation: '她去学校。\n\n  - <img src=x onerror=alert(1)>\n\t保留缩进 & 空行',
+      translationLanguage: '<简体中文>',
+    };
+    const script = new Script(MOBILE_HTML.match(/<script>([\s\S]*?)<\/script>/)![1]);
+    const elements = new Map<string, any>();
+    const getElementById = (id: string) => {
+      if (!elements.has(id)) elements.set(id, {
+        innerHTML: '', textContent: '', value: '', disabled: false,
+        classList: { add() {}, remove() {}, toggle() {} },
+      });
+      return elements.get(id);
+    };
+    const page = {
+      document: { getElementById, querySelectorAll: () => [], addEventListener() {}, hidden: false },
+      location: { hash: '#test-only-token', pathname: '/' },
+      history: { replaceState() {} },
+      sessionStorage: { getItem: () => null, setItem() {} },
+      fetch: async () => ({ ok: true, json: async () => ({ entries: [translated], now: new Date().toISOString() }) }),
+      AbortController, setTimeout, clearTimeout, setInterval: () => 0,
+    };
+    await script.runInNewContext(page);
+    expect(getElementById('review').innerHTML).not.toContain('保留缩进');
+    getElementById('reveal').onclick();
+    const revealed = getElementById('review').innerHTML;
+    expect(revealed).toContain('句意 · &lt;简体中文&gt;');
+    expect(revealed).toContain('她去学校。\n\n  - &lt;img src=x onerror=alert(1)&gt;\n\t保留缩进 &amp; 空行');
+    expect(revealed).not.toContain('<img');
+    getElementById('search').value = '保留缩进';
+    getElementById('search').oninput();
+    expect(getElementById('items').innerHTML).toContain(entry.original);
+
+    for (const oldOrTranslation of [entry, { ...translated, mode: 'translate' }]) {
+      elements.clear();
+      await script.runInNewContext({
+        ...page,
+        fetch: async () => ({ ok: true, json: async () => ({ entries: [oldOrTranslation], now: new Date().toISOString() }) }),
+      });
+      getElementById('reveal').onclick();
+      expect(getElementById('review').innerHTML).not.toContain('class="meaning"');
+    }
   });
 });

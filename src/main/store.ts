@@ -129,6 +129,9 @@ export function renderEntryMarkdown(entry: Entry): string {
     `- 创建时间：${entry.createdAt}\n- 目标语言：${plain(entry.targetLanguage)}\n- 学习主题：${entry.tags.map(plain).join(' · ') || '日常表达'}\n\n` +
     `## 先回忆\n\n阅读原句，先自己${entry.mode === 'grammar' ? '判断语法并尝试修改' : '说出译文'}，再看下面的答案。\n\n` +
     `## 原句\n\n${literal(entry.original)}\n\n## ${entry.mode === 'grammar' ? '正确表达' : '译文'}\n\n${literal(entry.corrected)}\n\n` +
+    (entry.mode === 'grammar' && entry.translation
+      ? `## 译文${entry.translationLanguage ? ` · ${plain(entry.translationLanguage)}` : ''}\n\n${literal(entry.translation)}\n\n`
+      : '') +
     `## 理解原因\n\n${quote(entry.explanation)}\n\n${entry.mode === 'grammar' ? `## 逐项解析\n\n${issueText}\n\n` : ''}` +
     `## 举一反三\n\n${quote(entry.example || '用同样的规则，写一句和自己有关的新句子。')}\n\n` +
     `## 主动练习\n\n- [ ] 不看答案，重新写出正确表达。\n- [ ] 用相同规则写一个自己的例句。\n- [ ] 在 LingoLeaf 的复习页评价记忆程度，安排下一次复习。\n\n` +
@@ -336,9 +339,16 @@ export class LibraryStore {
     return this.serial(async () => {
       const validated = analysisSchema.safeParse(analysis);
       if (!validated.success) throw new Error('学习内容格式无效，未写入学习库。');
+      const content = validated.data;
+      if (content.mode === 'grammar' && content.translation) {
+        content.translationLanguage = settings.explanationLanguage.trim() || '简体中文';
+      } else {
+        delete content.translation;
+        delete content.translationLanguage;
+      }
       const timestamp = new Date();
       const entry: Entry = {
-        ...validated.data,
+        ...content,
         id: randomUUID(),
         createdAt: timestamp.toISOString(),
         updatedAt: timestamp.toISOString(),

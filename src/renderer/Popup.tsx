@@ -56,7 +56,13 @@ export function Popup() {
             </div>
             <span className="eyebrow">A MOMENT OF DISCOVERY</span>
             <h2>{event.mode === 'grammar' ? '正在细读你的句子…' : '正在寻找恰当的表达…'}</h2>
-            {event.original && <blockquote>{event.original}</blockquote>}
+            {event.original && (
+              <blockquote
+                className={`text-content${/[\r\n]/.test(event.original) ? ' text-multiline' : ''}`}
+              >
+                {event.original}
+              </blockquote>
+            )}
             <Spinner label="使用你配置的模型" />
           </div>
         ) : event.status === 'error' ? (
@@ -76,7 +82,7 @@ export function Popup() {
           <>
             <div className="popup-original">
               <span className="eyebrow">YOU SELECTED</span>
-              <p>{event.result.original}</p>
+              <p className="text-content">{event.result.original}</p>
             </div>
             <ResultView result={event.result} notify={(text) => setMessage(text)} compact />
             {event.replaced && (

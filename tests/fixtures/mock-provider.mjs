@@ -25,6 +25,7 @@ const server = createServer(async (req, res) => {
         : incorrect
           ? text.replace(/\bShe go\b/, 'She goes')
           : text,
+      ...(!translating ? { translation: '她去上学。此译文来自本地测试服务。' } : {}),
       isCorrect: !incorrect,
       explanation: translating
         ? '“How is the weather” 用来询问天气。此结果来自本地测试服务。'

@@ -80,6 +80,7 @@ export function Library({
           const searchable = [
             entry.original,
             entry.corrected,
+            entry.translation || '',
             entry.explanation,
             ...entry.tags,
             ...entry.issues.map((issue) => issue.rule),
@@ -297,7 +298,7 @@ export function Library({
         <Modal title="一条属于你的语言笔记" onClose={() => setSelected(null)}>
           <div className="modal-original">
             <span className="eyebrow">YOUR ORIGINAL SENTENCE</span>
-            <p>{selected.original}</p>
+            <p className="text-content">{selected.original}</p>
           </div>
           <ResultView result={selected} notify={notify} />
           <div className="modal-footer">
@@ -321,7 +322,7 @@ export function Library({
         <Modal title="删除这条学习笔记？" onClose={() => !deleting && setDeleteTarget(null)}>
           <div className="confirm-content">
             <p>对应的学习记录和 Markdown 笔记会一并删除，此操作无法在应用内撤销。</p>
-            <blockquote>{deleteTarget.original}</blockquote>
+            <blockquote className="text-content">{deleteTarget.original}</blockquote>
           </div>
           <div className="modal-footer">
             <button

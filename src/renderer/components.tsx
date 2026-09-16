@@ -166,9 +166,22 @@ export function ResultView({
           <span>{isTranslate ? '译文' : '建议表达'}</span>
           <CopyButton text={result.corrected} notify={notify} />
         </div>
-        <p lang={isTranslate ? undefined : 'en'}>{result.corrected}</p>
+        <p className="text-content" lang={isTranslate ? undefined : 'en'}>
+          {result.corrected}
+        </p>
       </div>
-      {result.explanation && <p className="result-explanation">{result.explanation}</p>}
+      {!isTranslate && result.translation && (
+        <div className="result-sentence result-translation">
+          <div className="field-topline">
+            <span>句意{result.translationLanguage ? ` · ${result.translationLanguage}` : ''}</span>
+            <CopyButton text={result.translation} notify={notify} label="复制译文" />
+          </div>
+          <p className="text-content">{result.translation}</p>
+        </div>
+      )}
+      {result.explanation && (
+        <p className="result-explanation text-content">{result.explanation}</p>
+      )}
       {result.issues.length > 0 && (
         <div className="issues">
           <div className="section-label">
@@ -178,7 +191,7 @@ export function ResultView({
             <article className="issue" key={i}>
               <div className="issue-header">
                 <span className="issue-number">{String(i + 1).padStart(2, '0')}</span>
-                <strong>
+                <strong className="text-content">
                   {issue.rule || (issue.kind === 'grammar' ? '语法修改' : '表达建议')}
                 </strong>
                 <span className={`tag ${issue.kind === 'style' ? 'neutral' : 'amber'}`}>
@@ -186,11 +199,11 @@ export function ResultView({
                 </span>
               </div>
               <div className="issue-diff">
-                <del>{issue.original || '（省略）'}</del>
+                <del className="text-content">{issue.original || '（省略）'}</del>
                 <ChevronRight size={14} />
-                <ins>{issue.replacement || '（删除）'}</ins>
+                <ins className="text-content">{issue.replacement || '（删除）'}</ins>
               </div>
-              <p>{issue.explanation}</p>
+              <p className="text-content">{issue.explanation}</p>
             </article>
           ))}
         </div>
@@ -198,7 +211,7 @@ export function ResultView({
       {result.example && (
         <div className="example-block">
           <span className="eyebrow">TRY ANOTHER SENTENCE</span>
-          <p>{result.example}</p>
+          <p className="text-content">{result.example}</p>
         </div>
       )}
       {result.tags.length > 0 && (

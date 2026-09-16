@@ -8,6 +8,8 @@ html[data-theme='forest'] {
   --surface-elevated: #fffefa;
   --surface-hover: #e5ecdc;
   --input: #f9faf4;
+  --selection-bg: #315d40;
+  --selection-text: #ffffff;
   --line: #d9e0cf;
   --line-strong: #b8c7a9;
   --text: #263b2e;
@@ -50,6 +52,8 @@ html[data-theme='ocean'] {
   --surface-elevated: #ffffff;
   --surface-hover: #dceaf7;
   --input: #f5f9fd;
+  --selection-bg: #21648c;
+  --selection-text: #ffffff;
   --line: #d3e2ee;
   --line-strong: #a6c3da;
   --text: #223c51;
@@ -92,6 +96,8 @@ html[data-theme='lavender'] {
   --surface-elevated: #fffefe;
   --surface-hover: #e7e0f1;
   --input: #faf8fd;
+  --selection-bg: #745190;
+  --selection-text: #ffffff;
   --line: #e0d9ea;
   --line-strong: #c4b5d7;
   --text: #3c304b;
@@ -134,6 +140,8 @@ html[data-theme='midnight'] {
   --surface-elevated: #202e40;
   --surface-hover: #2a3d51;
   --input: #131e2b;
+  --selection-bg: #a7cddd;
+  --selection-text: #142331;
   --line: #34485c;
   --line-strong: #627b93;
   --text: #edf3fa;
