@@ -4,7 +4,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { analysisSchema, PROVIDER_DEFAULTS } from './providers';
 import { initialReview, scheduleReview } from '../shared/scheduler';
-import type { Analysis, AppearanceSettings, Entry, Rating, Settings } from '../shared/types';
+import type { Analysis, AppearanceSettings, ConversationTurn, Entry, Mode, Rating, Settings } from '../shared/types';
 
 export const DEFAULT_SETTINGS: Settings = {
   provider: 'openai',
@@ -68,6 +68,12 @@ const reviewSchema = z
     lastReviewedAt: z.string().datetime().nullable(),
   })
   .strict();
+const conversationTurnSchema = z.object({
+  id: z.string().uuid(),
+  question: z.string().trim().min(1).max(4000),
+  answer: z.string().min(1).max(12000).refine((value) => !!value.trim()),
+  createdAt: z.string().datetime(),
+}).strict();
 const entrySchema = analysisSchema
   .extend({
     id: z.string().uuid(),
@@ -76,6 +82,9 @@ const entrySchema = analysisSchema
     review: reviewSchema,
     sourceLanguage: z.string().max(100),
     targetLanguage: z.string().max(100),
+    conversation: z.array(conversationTurnSchema).max(20).refine(
+      (turns) => new Set(turns.map((turn) => turn.id)).size === turns.length,
+    ).optional(),
   })
   .strict();
 const librarySchema = z
@@ -113,6 +122,27 @@ function literal(value: string): string {
 function entryFilename(entry: Entry): string {
   return `${entry.createdAt.slice(0, 10)}-${entry.id}.md`;
 }
+function conversationFilename(entry: Entry, turn: ConversationTurn): string {
+  return `${entry.id}-${turn.id}.md`;
+}
+const modeLabels: Record<Mode, string> = {
+  grammar: '语法学习', translate: '翻译学习', read: '阅读解析', express: '表达探索',
+};
+const recallPrompts: Record<Mode, string> = {
+  grammar: '判断语法并尝试修改', translate: '说出译文', read: '解释句意和句子结构', express: '试着说出你想表达的意思',
+};
+function renderConversation(turns: ConversationTurn[]): string {
+  return turns.map((turn, index) =>
+    `### 追问 ${index + 1} · ${turn.createdAt}\n\n**问题**\n\n${literal(turn.question)}\n\n**回答**\n\n${literal(turn.answer)}`,
+  ).join('\n\n');
+}
+function renderConversationMarkdown(entry: Entry, turn: ConversationTurn): string {
+  return `# 学习追问 · ${turn.createdAt.slice(0, 10)}\n\n` +
+    `<!-- LingoLeaf conversation ${entry.id}/${turn.id}; immutable learning note. -->\n\n` +
+    `[原始学习笔记](../entries/${entryFilename(entry)}) · [学习索引](../index.md)\n\n` +
+    `## 原句\n\n${literal(entry.original)}\n\n## 问题\n\n${literal(turn.question)}\n\n` +
+    `## 回答\n\n${literal(turn.answer)}\n\n创建时间：${turn.createdAt}\n\n## 我的笔记\n\n`;
+}
 
 export function renderEntryMarkdown(entry: Entry): string {
   const issueText = entry.issues.length
@@ -124,17 +154,24 @@ export function renderEntryMarkdown(entry: Entry): string {
         .join('\n\n')
     : '没有需要纠正的语法错误。';
   return (
-    `# ${entry.mode === 'grammar' ? '语法学习' : '翻译学习'} · ${entry.createdAt.slice(0, 10)}\n\n` +
+    `# ${modeLabels[entry.mode]} · ${entry.createdAt.slice(0, 10)}\n\n` +
     `<!-- LingoLeaf entry ${entry.id}; immutable learning note. Personal annotations may be added below. -->\n\n` +
-    `- 创建时间：${entry.createdAt}\n- 目标语言：${plain(entry.targetLanguage)}\n- 学习主题：${entry.tags.map(plain).join(' · ') || '日常表达'}\n\n` +
-    `## 先回忆\n\n阅读原句，先自己${entry.mode === 'grammar' ? '判断语法并尝试修改' : '说出译文'}，再看下面的答案。\n\n` +
-    `## 原句\n\n${literal(entry.original)}\n\n## ${entry.mode === 'grammar' ? '正确表达' : '译文'}\n\n${literal(entry.corrected)}\n\n` +
+    `- 创建时间：${entry.createdAt}\n- 原文语言：${plain(entry.sourceLanguage)}\n- 目标语言：${plain(entry.targetLanguage)}\n- 学习主题：${entry.tags.map(plain).join(' · ') || '日常表达'}\n\n` +
+    (entry.expressionContext ? `## 表达场景\n\n${quote(entry.expressionContext)}\n\n` : '') +
+    (entry.expressionTone ? `## 表达语气\n\n${quote(entry.expressionTone)}\n\n` : '') +
+    `## 先回忆\n\n阅读原句，先自己${recallPrompts[entry.mode]}，再看下面的答案。\n\n` +
+    `## 原句\n\n${literal(entry.original)}\n\n## ${entry.mode === 'grammar' ? '正确表达' : entry.mode === 'express' ? '建议表达' : '译文'}\n\n${literal(entry.corrected)}\n\n` +
     (entry.mode === 'grammar' && entry.translation
       ? `## 译文${entry.translationLanguage ? ` · ${plain(entry.translationLanguage)}` : ''}\n\n${literal(entry.translation)}\n\n`
       : '') +
     `## 理解原因\n\n${quote(entry.explanation)}\n\n${entry.mode === 'grammar' ? `## 逐项解析\n\n${issueText}\n\n` : ''}` +
+    (entry.grammarPoints?.length ? `## 语法结构\n\n${entry.grammarPoints.map((point, index) => `### ${index + 1}\n\n${literal(point.text)}\n\n${quote(point.explanation)}`).join('\n\n')}\n\n` : '') +
+    (entry.keyPoints?.length ? `## 要点摘要\n\n${entry.keyPoints.map((point) => `- ${plain(point).replace(/\r?\n/g, '\n  ')}`).join('\n')}\n\n` : '') +
+    (entry.alternatives?.length ? `## 其他表达\n\n${entry.alternatives.map((alternative, index) => `### ${index + 1}. ${plain(alternative.tone)}\n\n${literal(alternative.text)}\n\n${quote(alternative.explanation)}`).join('\n\n')}\n\n` : '') +
+    (entry.clarificationQuestions?.length ? `## 可以再想一想\n\n${entry.clarificationQuestions.map((question) => `- ${plain(question).replace(/\r?\n/g, '\n  ')}`).join('\n')}\n\n` : '') +
     `## 举一反三\n\n${quote(entry.example || '用同样的规则，写一句和自己有关的新句子。')}\n\n` +
     `## 主动练习\n\n- [ ] 不看答案，重新写出正确表达。\n- [ ] 用相同规则写一个自己的例句。\n- [ ] 在 LingoLeaf 的复习页评价记忆程度，安排下一次复习。\n\n` +
+    (entry.conversation?.length ? `## 追问与回答\n\n${renderConversation(entry.conversation)}\n\n` : '') +
     `复习时间以 LingoLeaf 应用和 [学习索引](../index.md) 为准。本文件保留为可自由批注的学习笔记。\n\n## 我的笔记\n\n`
   );
 }
@@ -148,7 +185,8 @@ function renderIndex(entries: Entry[]): string {
     items
       .map(
         (entry) =>
-          `- [${plain(entry.original.replace(/\s+/g, ' ').slice(0, 100))}](entries/${entryFilename(entry)}) · ${entry.mode === 'grammar' ? '语法' : '翻译'} · 下次复习 ${entry.review.dueAt.slice(0, 16).replace('T', ' ')} UTC`,
+          `- [${plain(entry.original.replace(/\s+/g, ' ').slice(0, 100))}](entries/${entryFilename(entry)}) · ${modeLabels[entry.mode]} · 下次复习 ${entry.review.dueAt.slice(0, 16).replace('T', ' ')} UTC` +
+          (entry.conversation?.length ? `\n${entry.conversation.map((turn, index) => `  - [追问 ${index + 1}：${plain(turn.question.replace(/\s+/g, ' ').slice(0, 80))}](conversations/${conversationFilename(entry, turn)})`).join('\n')}` : ''),
       )
       .join('\n') || '暂无条目。';
   return (
@@ -157,7 +195,7 @@ function renderIndex(entries: Entry[]): string {
     `## 如何学习\n\n1. 先读原句，回忆正确表达或译文。\n2. 看答案，理解具体规则，再造一个自己的句子。\n3. 在桌面或手机复习页选择“忘记 / 困难 / 记住 / 轻松”，自动安排下一次复习。\n\n` +
     `## 到期复习\n\n${links(due)}\n\n## 全部笔记\n\n${links([...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt)))}\n\n` +
     `## 手机同步\n\n可把学习目录放入 OneDrive、iCloud Drive、Dropbox 等已有同步目录，在手机 Markdown 阅读器中打开。` +
-    `每条笔记独立保存，批注不会被应用覆盖；本索引会自动刷新。\n\n` +
+    `每条笔记和每轮追问独立保存，批注不会被应用覆盖；本索引会自动刷新。\n\n` +
     `复习进度保存在此电脑的本地数据库中。文件夹同步用于阅读与批注，不会导入手机对 Markdown 的修改为复习进度。` +
     `在同一受信任局域网中，使用应用内“手机复习”功能可直接更新桌面复习进度。\n`
   );
@@ -342,6 +380,9 @@ export class LibraryStore {
       const content = validated.data;
       if (content.mode === 'grammar' && content.translation) {
         content.translationLanguage = settings.explanationLanguage.trim() || '简体中文';
+      } else if (content.mode === 'read') {
+        delete content.translation;
+        content.translationLanguage = settings.explanationLanguage.trim() || '简体中文';
       } else {
         delete content.translation;
         delete content.translationLanguage;
@@ -353,14 +394,39 @@ export class LibraryStore {
         createdAt: timestamp.toISOString(),
         updatedAt: timestamp.toISOString(),
         review: initialReview(timestamp),
-        sourceLanguage: analysis.mode === 'grammar' ? 'English' : 'Auto',
-        targetLanguage: analysis.mode === 'grammar' ? 'English' : settings.targetLanguage,
+        sourceLanguage: content.mode === 'grammar' ? 'English' : content.mode === 'read' ? settings.targetLanguage : 'Auto',
+        targetLanguage: content.mode === 'grammar' ? 'English' : content.mode === 'read' ? settings.explanationLanguage : settings.targetLanguage,
       };
       const entries = [...this.entries, entry];
       await this.persistEntries(entries);
       this.entries = entries;
       await this.refreshMirror();
       return structuredClone(entry);
+    });
+  }
+
+  async addConversation(id: string, question: string, answer: string): Promise<Entry> {
+    return this.serial(async () => {
+      const entry = this.entries.find((item) => item.id === id);
+      if (!entry) throw new Error('这个学习条目已不存在。');
+      if ((entry.conversation?.length ?? 0) >= 20)
+        throw new Error('这个学习条目已达到 20 轮追问上限。');
+      const timestamp = new Date().toISOString();
+      const parsed = conversationTurnSchema.safeParse({
+        id: randomUUID(), question, answer, createdAt: timestamp,
+      });
+      if (!parsed.success)
+        throw new Error('追问内容无效：问题须为 1–4000 字，回答须为 1–12000 字，且不能仅含空白。');
+      const updated: Entry = {
+        ...entry,
+        updatedAt: timestamp,
+        conversation: [...(entry.conversation ?? []), parsed.data],
+      };
+      const entries = this.entries.map((item) => item.id === id ? updated : item);
+      await this.persistEntries(entries);
+      this.entries = entries;
+      await this.refreshMirror();
+      return structuredClone(updated);
     });
   }
 
@@ -393,6 +459,11 @@ export class LibraryStore {
         await fs.rm(path.join(this.getLibraryDirectory(), 'entries', entryFilename(entry)), {
           force: true,
         });
+        for (const turn of entry.conversation ?? []) {
+          await fs.rm(path.join(this.getLibraryDirectory(), 'conversations', conversationFilename(entry, turn)), {
+            force: true,
+          });
+        }
         await this.refreshMirror();
       } catch {
         this.syncError = '条目已从应用删除，但 Markdown 文件尚未删除。请检查学习目录权限。';
@@ -438,21 +509,32 @@ export class LibraryStore {
   private async writeMirror(settings: Settings): Promise<void> {
     const directory = path.join(settings.libraryPath, 'LingoLeaf');
     await fs.mkdir(path.join(directory, 'entries'), { recursive: true });
+    if (this.entries.some((entry) => entry.conversation?.length))
+      await fs.mkdir(path.join(directory, 'conversations'), { recursive: true });
     for (const entry of this.entries) {
       const filename = path.join(directory, 'entries', entryFilename(entry));
-      try {
-        // Never overwrite personal annotations in existing per-entry Markdown.
-        await fs.access(filename);
-        continue;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      }
-      try {
-        await atomicCreate(filename, renderEntryMarkdown(entry));
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      await this.createNoteIfMissing(filename, () => renderEntryMarkdown(entry));
+      for (const turn of entry.conversation ?? []) {
+        await this.createNoteIfMissing(
+          path.join(directory, 'conversations', conversationFilename(entry, turn)),
+          () => renderConversationMarkdown(entry, turn),
+        );
       }
     }
     await atomicWrite(path.join(directory, 'index.md'), renderIndex(this.entries));
+  }
+  private async createNoteIfMissing(filename: string, render: () => string): Promise<void> {
+    try {
+      // Never overwrite personal annotations in an existing learning note or conversation.
+      await fs.access(filename);
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    try {
+      await atomicCreate(filename, render());
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
   }
 }

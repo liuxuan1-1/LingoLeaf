@@ -3,17 +3,17 @@ import {
   BookOpenCheck,
   CircleAlert,
   CornerDownLeft,
-  Languages,
   Leaf,
   MousePointer2,
   Sparkles,
   WandSparkles,
   X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import type { Analysis, Mode, Settings } from '../shared/types';
+import { useEffect, useRef, useState } from 'react';
+import type { AnalysisResult, ExpressionOptions, Mode, Settings } from '../shared/types';
 import { api, errorMessage } from './bridge';
 import { ResultView, Shortcut, Spinner, type Notify } from './components';
+import { MODE_INFO, MODES } from './modes';
 
 export function Workbench({
   settings,
@@ -26,19 +26,27 @@ export function Workbench({
   settings: Settings;
   notify: Notify;
   onSettings: () => void;
-  initial: { text: string; mode: Mode; key: number } | null;
+  initial: { text: string; mode: Mode; key: number; options?: ExpressionOptions } | null;
   onDone: () => Promise<void>;
   syncError?: string | null;
 }) {
   const [mode, setMode] = useState<Mode>('grammar');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<Analysis | null>(null);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState('');
+  const [context, setContext] = useState('');
+  const [tone, setTone] = useState('');
+  const request = useRef(0);
+  useEffect(() => () => { request.current += 1; }, []);
   useEffect(() => {
     if (initial) {
+      request.current += 1;
       setText(initial.text);
       setMode(initial.mode);
+      setContext(initial.options?.context || '');
+      setTone(initial.options?.tone || '');
+      setBusy(false);
       setResult(null);
       setError('');
     }
@@ -50,57 +58,84 @@ export function Workbench({
   };
   const analyze = async () => {
     if (!text.trim() || busy) return;
+    const id = ++request.current;
     setBusy(true);
     setError('');
     setResult(null);
     try {
-      const response = await api.analyze(text, mode);
-      setResult(response);
+      const response = await api.analyze(text, mode, mode === 'express' ? { context, tone } : undefined);
+      if (id === request.current) setResult(response);
       await onDone();
     } catch (e) {
-      setError(errorMessage(e));
+      if (id === request.current) setError(errorMessage(e));
     } finally {
-      setBusy(false);
+      if (id === request.current) setBusy(false);
     }
   };
+  const copy = {
+    grammar: {
+      label: '今天，想练习哪一句？', direction: '英语',
+      help: '检查语法、读懂修改，并查看句意。',
+      placeholder: '例如：She go to school every day.',
+      samples: ['She go to school every day.', 'I am agree with you.'],
+      action: '检查这句话', loading: '每个细节，都值得读懂。',
+    },
+    translate: {
+      label: `把这段话，翻译为 ${settings.targetLanguage}`, direction: `→ ${settings.targetLanguage}`,
+      help: '输入原文，获得自然的译文和表达说明。',
+      placeholder: '例如：谢谢你的耐心，我会尽快回复。',
+      samples: ['今天天气怎么样？', '谢谢你的耐心，我会尽快回复。'],
+      action: '翻译这段话', loading: '为你的想法，找到恰当的表达。',
+    },
+    read: {
+      label: '读懂这段话，也读懂它的结构',
+      direction: `${settings.targetLanguage} → ${settings.explanationLanguage}`,
+      help: `将 ${settings.targetLanguage} 原文译成 ${settings.explanationLanguage}，拆解语法并归纳要点。语言可在偏好设置中调整。`,
+      placeholder: '例如：Had I known about the delay, I would have taken an earlier train.',
+      samples: ['Had I known about the delay, I would have taken an earlier train.', 'What matters most is how we respond to change.'],
+      action: '翻译并解析', loading: '从句意到结构，一起读懂。',
+    },
+    express: {
+      label: '想说什么？零散的想法也可以', direction: `→ ${settings.targetLanguage}`,
+      help: `用中文、${settings.targetLanguage} 或混合语言描述大意，得到推荐表达和不同说法。`,
+      placeholder: '例如：想告诉同事我最近有点忙，不想显得在拒绝，但希望下周再帮他看看。',
+      samples: ['有点忙，想把同事的请求推到下周，但不想太冷淡。', '这个想法很有启发，突然想通了，但不知道怎么自然地说。'],
+      action: '帮我组织表达', loading: '把模糊的意思，变成清楚的表达。',
+    },
+  } satisfies Record<Mode, { label: string; direction: string; help: string; placeholder: string; samples: string[]; action: string; loading: string }>;
+  const current = copy[mode];
   return (
     <section className="workbench-grid" aria-label="句子练习">
       <div className="card composer">
         <div className="composer-top">
-          <div className="segmented" role="tablist" aria-label="练习方式">
-            <button
-              role="tab"
-              aria-selected={mode === 'grammar'}
-              className={mode === 'grammar' ? 'selected' : ''}
-              onClick={() => changeMode('grammar')}
-              disabled={busy}
-            >
-              <WandSparkles size={16} />
-              语法纠错
-            </button>
-            <button
-              role="tab"
-              aria-selected={mode === 'translate'}
-              className={mode === 'translate' ? 'selected' : ''}
-              onClick={() => changeMode('translate')}
-              disabled={busy}
-            >
-              <Languages size={17} />
-              翻译表达
-            </button>
+          <div className="segmented practice-modes" role="tablist" aria-label="练习方式">
+            {MODES.map((value, index) => {
+              const Icon = MODE_INFO[value].icon;
+              return <button key={value} id={`mode-${value}`} role="tab"
+                aria-selected={mode === value} aria-controls="practice-panel"
+                tabIndex={mode === value ? 0 : -1}
+                className={mode === value ? 'selected' : ''} disabled={busy}
+                onClick={() => changeMode(value)}
+                onKeyDown={(event) => {
+                  const next = event.key === 'ArrowRight' ? (index + 1) % MODES.length
+                    : event.key === 'ArrowLeft' ? (index + MODES.length - 1) % MODES.length
+                    : event.key === 'Home' ? 0 : event.key === 'End' ? MODES.length - 1 : null;
+                  if (next === null) return;
+                  event.preventDefault();
+                  changeMode(MODES[next]);
+                  document.getElementById(`mode-${MODES[next]}`)?.focus();
+                }}>
+                <Icon size={17} />{MODE_INFO[value].label}
+              </button>;
+            })}
           </div>
-          <span className="micro-label">
-            {mode === 'grammar' ? 'WRITE & REFINE' : 'SAY IT ANOTHER WAY'}
-          </span>
         </div>
+        <div id="practice-panel" role="tabpanel" aria-labelledby={`mode-${mode}`}>
         <div className="composer-label">
-          <label htmlFor="sentence-input">
-            {mode === 'grammar'
-              ? '今天，想练习哪一句？'
-              : `把你的想法，表达为 ${settings.targetLanguage}`}
-          </label>
-          <span>{mode === 'grammar' ? '英语' : `→ ${settings.targetLanguage}`}</span>
+          <label htmlFor="sentence-input">{current.label}</label>
+          <span className="language-direction">{current.direction}</span>
         </div>
+        <p className="mode-help" id="mode-help">{current.help}</p>
         <div className="textarea-shell">
           <textarea
             id="sentence-input"
@@ -108,12 +143,11 @@ export function Workbench({
             value={text}
             maxLength={12000}
             disabled={busy}
-            placeholder={
-              mode === 'grammar' ? '例如：She go to school every day.' : '例如：今天天气怎么样？'
-            }
-            onChange={(event) => setText(event.target.value)}
+            placeholder={current.placeholder}
+            aria-describedby="mode-help"
+            onChange={(event) => { setText(event.target.value); setResult(null); setError(''); }}
             onKeyDown={(event) => {
-              if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+              if (!event.nativeEvent.isComposing && (event.ctrlKey || event.metaKey) && event.key === 'Enter') {
                 event.preventDefault();
                 void analyze();
               }
@@ -124,12 +158,25 @@ export function Workbench({
             <span>{text.length.toLocaleString()} / 12,000</span>
           </div>
         </div>
+        {mode === 'express' && (
+          <div className="expression-options">
+            <label className="form-field">
+              <span>场景与对象 <small>可选</small></span>
+              <textarea value={context} maxLength={2000} rows={2} disabled={busy}
+                placeholder="例如：给同事发消息，希望保持友好"
+                onChange={(event) => { setContext(event.target.value); setResult(null); }} />
+            </label>
+            <label className="form-field">
+              <span>希望的语气 <small>可选</small></span>
+              <input value={tone} maxLength={200} disabled={busy}
+                placeholder="例如：自然、委婉，或简短正式"
+                onChange={(event) => { setTone(event.target.value); setResult(null); }} />
+            </label>
+          </div>
+        )}
         <div className="sample-row">
           <span>试试示例</span>
-          {(mode === 'grammar'
-            ? ['She go to school every day.', 'I am agree with you.']
-            : ['今天天气怎么样？', '谢谢你的耐心，我会尽快回复。']
-          ).map((sample) => (
+          {current.samples.map((sample) => (
             <button
               key={sample}
               disabled={busy}
@@ -160,7 +207,7 @@ export function Workbench({
             ) : (
               <>
                 <Sparkles size={17} />
-                {mode === 'grammar' ? '检查这句话' : '翻译这句话'}
+                {current.action}
                 <span className="button-enter">
                   <CornerDownLeft size={12} />
                 </span>
@@ -181,6 +228,7 @@ export function Workbench({
             </div>
           </div>
         )}
+        </div>
       </div>
       <div className={`card insight-card ${result ? 'has-result' : ''}`} aria-live="polite">
         {busy ? (
@@ -190,7 +238,7 @@ export function Workbench({
             </div>
             <span className="eyebrow">A MOMENT OF DISCOVERY</span>
             <h3>
-              {mode === 'grammar' ? '每个细节，都值得读懂。' : '为你的想法，找到恰当的表达。'}
+              {current.loading}
             </h3>
             <p>正在联系你配置的模型，请稍候。</p>
             <div className="loading-bars">
@@ -207,13 +255,10 @@ export function Workbench({
                 <X size={16} />
               </button>
             </div>
-            <ResultView result={result} notify={notify} compact />
+            <ResultView key={request.current} result={result} entryId={result.entryId} notify={notify} compact />
             <div className="saved-note">
               <BookOpenCheck size={15} />
-              {result.mode === 'grammar' &&
-              result.isCorrect &&
-              !result.issues.length &&
-              !settings.saveCorrectSentences
+              {!result.entryId
                 ? '语法正确的句子未自动收藏，可在设置中开启。'
                 : syncError
                   ? '已保存到学习库；Markdown 同步需要处理，请查看顶部提示。'

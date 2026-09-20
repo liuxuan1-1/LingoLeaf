@@ -46,6 +46,7 @@ const preview: LingoAPI = {
   },
   getState: async () => structuredClone(previewState),
   analyze: desktopRequired,
+  ask: desktopRequired,
   saveSettings: desktopRequired,
   testProvider: desktopRequired,
   chooseLibrary: desktopRequired,

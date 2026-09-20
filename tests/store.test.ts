@@ -492,3 +492,223 @@ describe('scoped appearance persistence', () => {
     ).resolves.toEqual({ theme: 'lavender', fontSize: 'standard' });
   });
 });
+
+describe('reading, expression exploration and saved tutoring', () => {
+  const reading: Analysis = {
+    ...analysis,
+    mode: 'read',
+    original: 'Although it rained, we went for a walk.',
+    corrected: '虽然下雨了，我们还是出去散步。',
+    isCorrect: true,
+    issues: [],
+    explanation: 'Although 引导让步状语从句。',
+    grammarPoints: [{ text: 'Although it rained', explanation: '让步状语从句，表示与主句预期相反的情况。' }],
+    keyPoints: ['Although 表示“虽然”，不要同时使用 but。'],
+  };
+  const expressing: Analysis = {
+    ...analysis,
+    mode: 'express',
+    original: '想表达很想帮忙，但是最近事情有点多。',
+    corrected: 'I would love to help, but I have a lot on my plate right now.',
+    isCorrect: true,
+    issues: [],
+    explanation: '先表达意愿，再礼貌说明暂时忙碌。',
+    keyPoints: ['have a lot on my plate 表示手头事情很多。'],
+    alternatives: [
+      { text: 'I would be happy to help once my schedule clears up.', tone: '礼貌', explanation: '没有承诺具体日期。' },
+      { text: 'I am a little swamped right now, but I would love to help later.', tone: '轻松', explanation: '适合熟悉的朋友。' },
+    ],
+    clarificationQuestions: ['你是在回复同事，还是朋友？'],
+    expressionContext: '回复同事的请求',
+    expressionTone: '礼貌、轻松',
+  };
+  it('persists reading direction and expression context with complete learning Markdown', async () => {
+    const store = makeStore();
+    await store.init();
+    const settings = { ...store.getSettings(), targetLanguage: 'English', explanationLanguage: '简体中文' };
+    const read = await store.add(reading, settings);
+    const express = await store.add(expressing, settings);
+    expect(read).toMatchObject({ sourceLanguage: 'English', targetLanguage: '简体中文', grammarPoints: reading.grammarPoints, keyPoints: reading.keyPoints });
+    expect(express).toMatchObject({ sourceLanguage: 'Auto', targetLanguage: 'English', alternatives: expressing.alternatives, expressionContext: expressing.expressionContext, expressionTone: expressing.expressionTone, clarificationQuestions: expressing.clarificationQuestions });
+    expect(read).not.toHaveProperty('translation');
+    expect(express).not.toHaveProperty('translation');
+    await store.saveSettings({ ...settings, targetLanguage: 'Deutsch', explanationLanguage: '日本語' });
+    const restarted = makeStore();
+    await restarted.init();
+    expect(restarted.list().find((entry) => entry.id === read.id)).toEqual(read);
+    expect(restarted.list().find((entry) => entry.id === express.id)).toEqual(express);
+    const readMarkdown = renderEntryMarkdown(read);
+    expect(readMarkdown).toContain('# 阅读解析');
+    expect(readMarkdown).toContain('## 语法结构');
+    expect(readMarkdown).toContain('Although it rained');
+    expect(readMarkdown).toContain('## 要点摘要');
+    const expressMarkdown = renderEntryMarkdown(express);
+    for (const value of ['# 表达探索', '## 建议表达', '## 其他表达', '## 可以再想一想', '## 表达场景', '回复同事的请求', '## 表达语气', '礼貌、轻松']) expect(expressMarkdown).toContain(value);
+    const index = await fs.readFile(path.join(store.getLibraryDirectory(), 'index.md'), 'utf8');
+    expect(index).toContain('阅读解析');
+    expect(index).toContain('表达探索');
+  });
+  it('loads an old library without adding fields or rewriting its JSON, settings or notes', async () => {
+    const store = makeStore();
+    await store.init();
+    const { translation: _translation, translationLanguage: _language, ...legacy } = analysis;
+    const entry = await store.add(legacy, store.getSettings());
+    const notePath = path.join(store.getLibraryDirectory(), 'entries', (await fs.readdir(path.join(store.getLibraryDirectory(), 'entries')))[0]);
+    await fs.appendFile(notePath, '\nPersonal notes from v0.1.0.\n');
+    const paths = [path.join(directory, 'settings.json'), path.join(directory, 'library.json'), notePath];
+    const before = await Promise.all(paths.map((file) => fs.readFile(file, 'utf8')));
+    const restarted = makeStore();
+    await restarted.init();
+    expect(restarted.list()).toEqual([entry]);
+    expect(restarted.list()[0]).not.toHaveProperty('conversation');
+    expect(await Promise.all(paths.map((file) => fs.readFile(file, 'utf8')))).toEqual(before);
+  });
+  it('saves tutoring across restart and preserves original notes, sidecar annotations and review state', async () => {
+    const store = makeStore();
+    await store.init();
+    const original = await store.add(reading, store.getSettings());
+    const noteDir = path.join(store.getLibraryDirectory(), 'entries');
+    const notePath = path.join(noteDir, (await fs.readdir(noteDir))[0]);
+    await fs.appendFile(notePath, '\nKeep this annotation.\n');
+    const note = await fs.readFile(notePath, 'utf8');
+    const first = await store.addConversation(original.id, '  为什么不用 but？  ', '因为 although 已经表达让步关系。\n\n  保留换行和缩进。');
+    expect(first.review).toEqual(original.review);
+    expect(first.original).toBe(original.original);
+    expect(first.corrected).toBe(original.corrected);
+    expect(first.conversation).toHaveLength(1);
+    const turn = first.conversation![0];
+    expect(turn).toMatchObject({ question: '为什么不用 but？', answer: '因为 although 已经表达让步关系。\n\n  保留换行和缩进。' });
+    expect(turn.id).toMatch(/^[a-f\d-]{36}$/);
+    expect(Date.parse(turn.createdAt)).not.toBeNaN();
+    const sidecarDir = path.join(store.getLibraryDirectory(), 'conversations');
+    const sidecarPath = path.join(sidecarDir, `${original.id}-${turn.id}.md`);
+    const firstSidecar = await fs.readFile(sidecarPath, 'utf8');
+    expect(firstSidecar).toContain(original.original);
+    expect(firstSidecar).toContain('为什么不用 but？');
+    expect(firstSidecar).toContain('[原始学习笔记](../entries/');
+    await fs.appendFile(sidecarPath, '\nMy own follow-up annotation.\n');
+    const annotatedSidecar = await fs.readFile(sidecarPath, 'utf8');
+    first.conversation![0].answer = 'Cannot mutate saved turns through the return value';
+    const second = await store.addConversation(original.id, '可以给个例句吗？', 'Although I was tired, I finished the work.');
+    expect(second.conversation).toHaveLength(2);
+    expect(second.conversation![0].answer).toContain('although');
+    const reloaded = makeStore();
+    await reloaded.init();
+    expect(reloaded.list()).toEqual([second]);
+    expect(await fs.readFile(notePath, 'utf8')).toBe(note);
+    expect(await fs.readFile(sidecarPath, 'utf8')).toBe(annotatedSidecar);
+    expect(await fs.readdir(sidecarDir)).toHaveLength(2);
+    const index = await fs.readFile(path.join(store.getLibraryDirectory(), 'index.md'), 'utf8');
+    for (const current of second.conversation!) expect(index).toContain(`conversations/${original.id}-${current.id}.md`);
+    const exported = renderEntryMarkdown(second);
+    expect(exported).toContain('## 追问与回答');
+    expect(exported).toContain('为什么不用 but？');
+    expect(exported).toContain('Although I was tired, I finished the work.');
+  });
+  it('validates tutoring boundaries without changing persisted data', async () => {
+    const store = makeStore();
+    await store.init();
+    const entry = await store.add(reading, store.getSettings());
+    const before = await fs.readFile(path.join(directory, 'library.json'), 'utf8');
+    for (const [question, answer] of [['', 'answer'], [' \n ', 'answer'], ['x'.repeat(4001), 'answer'], ['question', ''], ['question', ' \n '], ['question', 'x'.repeat(12001)]]) {
+      await expect(store.addConversation(entry.id, question, answer)).rejects.toThrow('追问内容无效');
+    }
+    await expect(store.addConversation('not-an-entry', 'question', 'answer')).rejects.toThrow('不存在');
+    expect(await fs.readFile(path.join(directory, 'library.json'), 'utf8')).toBe(before);
+    const valid = await store.addConversation(entry.id, 'x'.repeat(4000), 'y'.repeat(12000));
+    expect(valid.conversation![0].question).toHaveLength(4000);
+    expect(valid.conversation![0].answer).toHaveLength(12000);
+  });
+  it('serializes simultaneous turns and enforces the limit without losing review updates', async () => {
+    const store = makeStore();
+    await store.init();
+    const entry = await store.add(reading, store.getSettings());
+    const results = await Promise.allSettled([
+      ...Array.from({ length: 21 }, (_, i) => store.addConversation(entry.id, `Question ${i}`, `Answer ${i}`)),
+      store.rate(entry.id, 'good'),
+    ]);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(results[20]).toMatchObject({ status: 'rejected', reason: expect.objectContaining({ message: expect.stringContaining('20 轮') }) });
+    const current = store.list()[0];
+    expect(current.conversation).toHaveLength(20);
+    expect(current.conversation!.map((turn) => turn.question)).toEqual(Array.from({ length: 20 }, (_, i) => `Question ${i}`));
+    expect(new Set(current.conversation!.map((turn) => turn.id)).size).toBe(20);
+    expect(current.review.repetitions).toBe(1);
+    const reloaded = makeStore();
+    await reloaded.init();
+    expect(reloaded.list()).toEqual([current]);
+  }, 15000);
+  it('does not commit a turn after a failed JSON write and permits a clean retry', async () => {
+    const store = makeStore();
+    await store.init();
+    const entry = await store.add(reading, store.getSettings());
+    const before = await fs.readFile(path.join(directory, 'library.json'), 'utf8');
+    vi.spyOn(fs, 'rename').mockRejectedValueOnce(Object.assign(new Error('disk denied'), { code: 'EACCES' }));
+    await expect(store.addConversation(entry.id, 'Question', 'Answer')).rejects.toThrow('disk denied');
+    expect(store.list()[0]).not.toHaveProperty('conversation');
+    expect(await fs.readFile(path.join(directory, 'library.json'), 'utf8')).toBe(before);
+    const retried = await store.addConversation(entry.id, 'Question', 'Answer');
+    expect(retried.conversation).toHaveLength(1);
+    expect(await fs.readdir(path.join(store.getLibraryDirectory(), 'conversations'))).toHaveLength(1);
+  });
+  it('retains a committed turn during sidecar failure and recreates the complete sidecar on restart', async () => {
+    const store = makeStore();
+    await store.init();
+    const entry = await store.add(reading, store.getSettings());
+    vi.spyOn(fs, 'link').mockRejectedValueOnce(Object.assign(new Error('disk unavailable'), { code: 'EIO' }));
+    const saved = await store.addConversation(entry.id, 'Question', 'Answer');
+    expect(store.getSyncError()).toContain('Markdown 同步失败');
+    expect(store.list()).toEqual([saved]);
+    const sidecarDir = path.join(store.getLibraryDirectory(), 'conversations');
+    expect(await fs.readdir(sidecarDir)).toEqual([]);
+    const reloaded = makeStore();
+    await reloaded.init();
+    expect(reloaded.list()).toEqual([saved]);
+    expect(reloaded.getSyncError()).toBeNull();
+    const sidecars = await fs.readdir(sidecarDir);
+    expect(sidecars).toHaveLength(1);
+    expect(await fs.readFile(path.join(sidecarDir, sidecars[0]), 'utf8')).toContain('## 我的笔记');
+  });
+  it('deletes only a selected entry and its exact saved sidecars', async () => {
+    const store = makeStore();
+    await store.init();
+    const first = await store.add(reading, store.getSettings());
+    const second = await store.add(expressing, store.getSettings());
+    const savedFirst = await store.addConversation(first.id, 'Question 1', 'Answer 1');
+    const savedSecond = await store.addConversation(second.id, 'Question 2', 'Answer 2');
+    const sidecarDir = path.join(store.getLibraryDirectory(), 'conversations');
+    const unrelated = path.join(sidecarDir, `${first.id}-personal.md`);
+    await fs.writeFile(unrelated, 'This file is not managed by the app.');
+    await store.remove(first.id);
+    expect(store.list()).toEqual([savedSecond]);
+    const files = await fs.readdir(sidecarDir);
+    expect(files).not.toContain(`${first.id}-${savedFirst.conversation![0].id}.md`);
+    expect(files).toContain(`${second.id}-${savedSecond.conversation![0].id}.md`);
+    expect(await fs.readFile(unrelated, 'utf8')).toBe('This file is not managed by the app.');
+    const reloaded = makeStore();
+    await reloaded.init();
+    expect(reloaded.list()).toEqual([savedSecond]);
+  });
+  it('escapes new teaching fields and fences tutoring text without interpreting model HTML or links', async () => {
+    const store = makeStore();
+    await store.init();
+    const malicious = '<script>alert(1)</script> [click](javascript:evil)';
+    const entry = await store.add({
+      ...expressing,
+      grammarPoints: [{ text: '```\n<img src=x>', explanation: malicious }],
+      keyPoints: [malicious],
+      alternatives: [{ text: '```\n<img src=x>', tone: malicious, explanation: malicious }],
+      clarificationQuestions: [malicious],
+      expressionContext: malicious,
+      expressionTone: malicious,
+    }, store.getSettings());
+    const saved = await store.addConversation(entry.id, '```\n<img src=x>', '````\n<script>alert(1)</script>');
+    const markdown = renderEntryMarkdown(saved);
+    expect(markdown).toContain('&lt;script&gt;');
+    expect(markdown).toContain('\\[click\\]\\(javascript:evil\\)');
+    expect(markdown).toContain('````text\n```\n<img src=x>\n````');
+    expect(markdown).toContain('`````text\n````\n<script>alert(1)</script>\n`````');
+    const sidecarDir = path.join(store.getLibraryDirectory(), 'conversations');
+    expect(await fs.readFile(path.join(sidecarDir, (await fs.readdir(sidecarDir))[0]), 'utf8')).toContain('`````text\n````\n<script>alert(1)</script>\n`````');
+  });
+});

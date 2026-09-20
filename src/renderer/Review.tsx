@@ -1,6 +1,6 @@
 import { ArrowRight, BookOpenCheck, Check, Eye, Flower2, RotateCcw, Sprout } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Entry, Rating } from '../shared/types';
+import type { Entry, Mode, Rating } from '../shared/types';
 import { api, errorMessage } from './bridge';
 import { EmptyState, ResultView, SectionHeading, type Notify } from './components';
 
@@ -28,6 +28,12 @@ export function ReviewPage({
     [entries, now],
   );
   const current = queue[0];
+  const prompts = {
+    grammar: { label: '找到语法问题，试着修改', hint: '哪里需要修改？为什么？在心里先说出你的答案。' },
+    translate: { label: `试着翻译为 ${current?.targetLanguage || ''}`, hint: '不急着看答案，先用目标语言完整表达一次。' },
+    read: { label: '回想句意、语法结构与要点', hint: '这段话在说什么？试着解释句子结构，再总结它的要点。' },
+    express: { label: '回想怎样自然地表达这个意思', hint: '结合原来的场景与语气，先组织一种自然的说法。' },
+  } satisfies Record<Mode, { label: string; hint: string }>;
   const upcoming = [...entries]
     .filter((entry) => new Date(entry.review.dueAt).getTime() > Date.now())
     .sort((a, b) => a.review.dueAt.localeCompare(b.review.dueAt))[0];
@@ -101,9 +107,7 @@ export function ReviewPage({
             <article className="review-card">
               <div className="review-card-top">
                 <span className="tag">
-                  {current.mode === 'translate'
-                    ? `试着翻译为 ${current.targetLanguage}`
-                    : '找到语法问题，试着修改'}
+                  {prompts[current.mode].label}
                 </span>
                 <span className="eyebrow">ACTIVE RECALL</span>
               </div>
@@ -127,9 +131,7 @@ export function ReviewPage({
                     <i />
                   </span>
                   <p>
-                    {current.mode === 'grammar'
-                      ? '哪里需要修改？为什么？在心里先说出你的答案。'
-                      : '不急着看答案，先用目标语言完整表达一次。'}
+                    {prompts[current.mode].hint}
                   </p>
                   <button className="button primary" onClick={() => setRevealed(true)}>
                     <Eye size={17} />

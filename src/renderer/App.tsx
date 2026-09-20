@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { AppState, Entry, Mode, Settings } from '../shared/types';
+import type { AppState, Entry, ExpressionOptions, Mode, Settings } from '../shared/types';
 import { api, errorMessage, isPreview } from './bridge';
 import { Brand, EmptyState, SectionHeading, Shortcut, TitleBar, type Notify } from './components';
 import { Workbench } from './Workbench';
@@ -28,6 +28,7 @@ import { Library } from './Library';
 import { ReviewPage } from './Review';
 import { SettingsPage } from './Settings';
 import { MobilePage } from './Mobile';
+import { MODE_INFO } from './modes';
 
 export type Page = 'workbench' | 'library' | 'review' | 'mobile' | 'settings';
 export function App() {
@@ -36,7 +37,7 @@ export function App() {
   const [page, setPage] = useState<Page>('workbench');
   const [toast, setToast] = useState<{ message: string; kind: string; id: number } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [initialText, setInitialText] = useState<{ text: string; mode: Mode; key: number } | null>(
+  const [initialText, setInitialText] = useState<{ text: string; mode: Mode; key: number; options?: ExpressionOptions } | null>(
     null,
   );
   const [now, setNow] = useState(Date.now());
@@ -100,8 +101,8 @@ export function App() {
       notify(errorMessage(e), 'error');
     }
   };
-  const goPractice = (text?: string, mode: Mode = 'grammar') => {
-    if (text) setInitialText({ text, mode, key: Date.now() });
+  const goPractice = (text?: string, mode: Mode = 'grammar', options?: ExpressionOptions) => {
+    if (text) setInitialText({ text, mode, key: Date.now(), options });
     setPage('workbench');
   };
   if (!state)
@@ -339,11 +340,11 @@ export function App() {
                         <button
                           className="recent-card"
                           key={entry.id}
-                          onClick={() => goPractice(entry.original, entry.mode)}
+                          onClick={() => goPractice(entry.original, entry.mode, { context: entry.expressionContext, tone: entry.expressionTone })}
                         >
                           <div>
                             <span className={`tag ${entry.mode === 'translate' ? 'amber' : ''}`}>
-                              {entry.mode === 'translate' ? '翻译' : '语法'}
+                              {MODE_INFO[entry.mode].short}
                             </span>
                             <ArrowUpRight size={16} />
                           </div>
@@ -359,7 +360,7 @@ export function App() {
                     </span>
                     <div>
                       <strong>你的第一片语叶，从一句话开始</strong>
-                      <p>完成一次纠错或翻译后，学习笔记会出现在这里。</p>
+                      <p>完成练习后，保存的学习笔记会出现在这里。</p>
                     </div>
                     <span className="decorative-line" />
                   </div>

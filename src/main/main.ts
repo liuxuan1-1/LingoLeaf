@@ -16,8 +16,9 @@ import {
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { z } from 'zod';
-import { LibraryStore, credentialScope } from './store';
+import { LibraryStore, credentialScope, renderEntryMarkdown } from './store';
 import { analyzeText, testProvider } from './providers';
+import { TutorService } from './tutor';
 import { NativeService, type NativeCapture } from './native';
 import { MobileServer } from './mobile';
 import type { Analysis, Mode, ResultEvent, Settings } from '../shared/types';
@@ -35,7 +36,7 @@ const textInput = z
   .min(1, '请先选中或输入一句话。')
   .max(12000, '一次最多处理 12,000 个字符。')
   .refine((text) => text.trim().length > 0, '请先选中或输入一句话。');
-const modeInput = z.enum(['grammar', 'translate']);
+const modeInput = z.enum(['grammar', 'translate', 'read', 'express']);
 const ratingInput = z.enum(['again', 'hard', 'good', 'easy']);
 const settingsInput = z.object({
   provider: z.enum(['openai', 'compatible', 'anthropic', 'azure', 'ollama']),
@@ -170,7 +171,7 @@ function errorText(error: unknown) {
 }
 async function persist(result: Analysis, settings: Settings) {
   if (
-    result.mode === 'translate' ||
+    result.mode !== 'grammar' ||
     !result.isCorrect ||
     result.issues.length ||
     settings.saveCorrectSentences
@@ -265,6 +266,7 @@ function handle(channel: string, handler: (...args: any[]) => unknown) {
   });
 }
 function setupIPC() {
+  const tutor = new TutorService(store);
   handle('appearance:get', () => store.getAppearance());
   handle('appearance:save', async (value: unknown) => {
     const appearance = z
@@ -288,11 +290,23 @@ function setupIPC() {
   }));
   handle('result:get', () => latestResult);
   handle('analyze', async (value: unknown) => {
-    const request = z.object({ text: textInput, mode: modeInput }).parse(value);
+    const request = z.object({
+      text: textInput,
+      mode: modeInput,
+      options: z.object({
+        context: z.string().trim().max(2000).optional(),
+        tone: z.string().trim().max(200).optional(),
+      }).strict().optional(),
+    }).strict().parse(value);
     const requestSettings = store.getProviderSettings();
-    const result = await analyzeText(request.text, request.mode, requestSettings);
-    await persist(result, requestSettings);
-    return result;
+    const result = await analyzeText(request.text, request.mode, requestSettings, request.options);
+    const entryId = await persist(result, requestSettings);
+    return { ...result, entryId };
+  });
+  handle('tutor:ask', async (value: unknown) => {
+    const response = await tutor.ask(value);
+    if (response.entry) broadcast();
+    return response;
   });
   handle('settings:save', async (value: unknown) => {
     const settings = settingsInput.parse(value),
@@ -391,13 +405,7 @@ function setupIPC() {
     if (result.canceled || !result.filePath) return null;
     const sections = store
       .list()
-      .map((e) => {
-        const translation =
-          e.mode === 'grammar' && e.translation
-            ? `句意${e.translationLanguage ? ` · ${escapeMd(e.translationLanguage)}` : ''}：\n\n${quote(e.translation)}\n\n`
-            : '';
-        return `## ${e.createdAt.slice(0, 10)} · ${e.mode === 'grammar' ? '语法纠错' : '翻译'}\n\n原句：\n\n${quote(e.original)}\n\n修改 / 译文：\n\n${quote(e.corrected)}\n\n${translation}${quote(e.explanation)}\n\n${e.issues.map((i) => `- **${escapeMd(i.rule)}**：${escapeMd(i.original)} → ${escapeMd(i.replacement)}\n  ${escapeMd(i.explanation)}`).join('\n')}\n\n例句：${escapeMd(e.example)}\n\n下次复习：${e.review.dueAt}\n`;
-      });
+      .map((entry) => renderEntryMarkdown(entry) + `\n下次复习：${entry.review.dueAt}\n`);
     await fs.writeFile(
       result.filePath,
       '# LingoLeaf · 我的语言学习库\n\n' + sections.join('\n---\n\n'),
@@ -416,16 +424,6 @@ function setupIPC() {
       else w?.hide();
     });
 }
-function escapeMd(text: string) {
-  return text.replace(/[\\`*_{}\[\]<>#|]/g, '\\$&').replace(/\r?\n/g, ' ');
-}
-function quote(text: string) {
-  return text
-    .split(/\r?\n/)
-    .map((line) => '> ' + escapeMd(line))
-    .join('\n');
-}
-
 app.commandLine.appendSwitch('force-renderer-accessibility');
 if (process.env.LINGOLEAF_DATA_DIR && !app.isPackaged)
   app.setPath('userData', path.resolve(process.env.LINGOLEAF_DATA_DIR));

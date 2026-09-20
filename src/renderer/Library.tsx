@@ -3,17 +3,15 @@ import {
   ArrowRight,
   BookOpen,
   Clock3,
-  Languages,
   Search,
   Sprout,
   Trash2,
-  WandSparkles,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Entry, Mode } from '../shared/types';
+import type { Entry, ExpressionOptions, Mode } from '../shared/types';
 import { api, errorMessage } from './bridge';
+import { entrySearchText, MODE_INFO, MODES } from './modes';
 import {
-  CopyButton,
   EmptyState,
   formatDate,
   Modal,
@@ -32,7 +30,7 @@ export function Library({
 }: {
   entries: Entry[];
   notify: Notify;
-  onPractice: (text?: string, mode?: Mode) => void;
+  onPractice: (text?: string, mode?: Mode, options?: ExpressionOptions) => void;
   onReview: () => void;
   onExport: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -77,16 +75,7 @@ export function Library({
             filter === 'all' ||
             entry.mode === filter ||
             (filter === 'due' && new Date(entry.review.dueAt).getTime() <= Date.now());
-          const searchable = [
-            entry.original,
-            entry.corrected,
-            entry.translation || '',
-            entry.explanation,
-            ...entry.tags,
-            ...entry.issues.map((issue) => issue.rule),
-          ]
-            .join(' ')
-            .toLowerCase();
+          const searchable = entrySearchText(entry);
           return (
             matchesMode &&
             (!tag || entry.tags.includes(tag)) &&
@@ -134,7 +123,7 @@ export function Library({
           <input
             ref={searchRef}
             aria-label="搜索学习笔记"
-            placeholder="搜索句子、语法规则、标签…"
+            placeholder="搜索句子、语法、要点、追问…"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -171,8 +160,7 @@ export function Library({
         <div className="filter-tabs">
           {[
             { id: 'all', label: '全部积累' },
-            { id: 'grammar', label: '语法纠错' },
-            { id: 'translate', label: '翻译表达' },
+            ...MODES.map((mode) => ({ id: mode, label: MODE_INFO[mode].label })),
             { id: 'due', label: '待复习' },
           ].map((item) => (
             <button
@@ -195,7 +183,7 @@ export function Library({
           <EmptyState
             icon={<Sprout size={34} strokeWidth={1.4} />}
             title="给你的学习库，种下第一句话"
-            description="在工作台检查语法、翻译文字，或在其他应用中选中文字后按下快捷键。需要保存的结果会自动收录，并生成 Markdown 笔记。"
+            description="在工作台纠错、翻译、阅读解析或组织想法。需要保存的结果会自动收录，并生成 Markdown 笔记。"
             action={
               <button className="button primary" onClick={() => onPractice()}>
                 开始第一句练习
@@ -226,17 +214,15 @@ export function Library({
         </div>
       ) : (
         <div className="library-grid">
-          {filtered.slice(0, limit).map((entry) => (
+          {filtered.slice(0, limit).map((entry) => {
+            const Icon = MODE_INFO[entry.mode].icon;
+            return (
             <article className="note-card" key={entry.id}>
               <button className="note-open" onClick={() => setSelected(entry)}>
                 <div className="note-top">
                   <span className={`note-kind ${entry.mode}`}>
-                    {entry.mode === 'grammar' ? (
-                      <WandSparkles size={14} />
-                    ) : (
-                      <Languages size={15} />
-                    )}
-                    {entry.mode === 'grammar' ? '语法笔记' : '翻译笔记'}
+                    <Icon size={15} />
+                    {MODE_INFO[entry.mode].note}
                   </span>
                   <time dateTime={entry.createdAt}>{formatDate(entry.createdAt)}</time>
                 </div>
@@ -274,7 +260,7 @@ export function Library({
                 </button>
               </div>
             </article>
-          ))}
+          ); })}
         </div>
       )}
       {filtered.length > limit && (
@@ -308,7 +294,7 @@ export function Library({
             <button
               className="button secondary"
               onClick={() => {
-                onPractice(selected.original, selected.mode);
+                onPractice(selected.original, selected.mode, { context: selected.expressionContext, tone: selected.expressionTone });
                 setSelected(null);
               }}
             >

@@ -4967,3 +4967,283 @@ textarea:disabled {
 :focus-visible {
   outline-color: var(--accent) !important;
 }
+
+/* The four practice modes share the same readable scale and theme tokens. */
+.practice-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+}
+.practice-modes button {
+  min-height: 48px;
+  min-width: 0;
+}
+.mode-help {
+  margin: -0.2rem 0 0.9rem;
+  color: var(--text-secondary);
+  font-size: var(--font-help);
+  line-height: 1.75;
+}
+.composer-label .language-direction {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-overflow: clip;
+}
+.expression-options {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+.expression-options .form-field {
+  margin: 0;
+}
+.expression-options .form-field > span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.expression-options small {
+  color: var(--text-muted);
+  font-size: var(--font-help);
+  font-weight: 400;
+}
+.expression-options textarea,
+.tutor-compose textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  background: var(--input);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: var(--font-body);
+  line-height: 1.75;
+  resize: vertical;
+}
+.expression-options textarea::placeholder,
+.tutor-compose textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+.expression-context {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.5rem 0.8rem;
+  font-size: var(--font-help);
+  padding: 0.85rem;
+  margin-bottom: 1rem;
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.expression-context dt {
+  color: var(--text-muted);
+}
+.expression-context dd {
+  margin: 0;
+  color: var(--text);
+}
+.learning-section {
+  margin: 1.35rem 0;
+}
+.learning-section .section-label {
+  font-weight: 600;
+  margin-bottom: 0.8rem;
+}
+.grammar-point-list {
+  padding-left: 1.4rem;
+  margin: 0;
+}
+.grammar-point-list li {
+  margin-bottom: 1rem;
+  padding-left: 0.2rem;
+}
+.grammar-point-list li::marker {
+  color: var(--accent-text);
+}
+.grammar-point-list blockquote {
+  margin: 0 0 0.5rem;
+  border-left: 3px solid var(--accent-border);
+  padding: 0.45rem 0.7rem;
+  background: var(--surface-soft);
+  color: var(--text);
+}
+.grammar-point-list p,
+.learning-section li,
+.alternative-reason,
+.conversation-turn p {
+  line-height: 1.85;
+  font-size: var(--font-body);
+  color: var(--text);
+}
+.key-points,
+.clarification {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 1rem;
+  background: var(--surface-soft);
+}
+.key-points ul,
+.clarification ul {
+  margin: 0;
+  padding-left: 1.3rem;
+}
+.key-points li + li,
+.clarification li + li {
+  margin-top: 0.5rem;
+}
+.clarification > p {
+  margin-top: 0.75rem;
+  font-size: var(--font-help);
+  color: var(--text-secondary);
+}
+.expression-alternatives {
+  display: grid;
+  gap: 0.8rem;
+}
+.expression-alternative {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+  min-width: 0;
+}
+.alternative-text {
+  font-family: Georgia, 'Microsoft YaHei UI', serif;
+  font-size: 1.15rem;
+  line-height: 1.8;
+  margin: 0.35rem 0 0.6rem;
+}
+.alternative-reason {
+  color: var(--text-secondary);
+}
+.tutor-panel {
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  margin-top: 1.25rem;
+  background: var(--surface);
+  overflow: hidden;
+}
+.tutor-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 64px;
+  padding: 0.85rem;
+  text-align: left;
+  color: var(--accent-text);
+}
+.tutor-toggle:hover {
+  background: var(--surface-hover);
+}
+.tutor-toggle > span {
+  flex: 1;
+  min-width: 0;
+}
+.tutor-toggle strong,
+.tutor-toggle small {
+  display: block;
+  line-height: 1.6;
+}
+.tutor-toggle strong {
+  font-weight: 550;
+  font-size: var(--font-control);
+}
+.tutor-toggle small {
+  font-size: var(--font-help);
+  color: var(--text-secondary);
+}
+.tutor-toggle > svg {
+  flex-shrink: 0;
+}
+.tutor-toggle .is-open {
+  transform: rotate(180deg);
+}
+.tutor-content {
+  border-top: 1px solid var(--line);
+  padding: 0.9rem;
+}
+.tutor-caption {
+  color: var(--text-secondary);
+  font-size: var(--font-help);
+  line-height: 1.75;
+  margin-bottom: 1rem;
+}
+.conversation-list {
+  display: grid;
+  gap: 1.2rem;
+  max-height: min(32rem, 55vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 0.3rem;
+}
+.conversation-turn {
+  min-width: 0;
+}
+.conversation-question {
+  background: var(--accent-soft);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+.conversation-question > span {
+  display: block;
+  color: var(--accent-text);
+  font-size: var(--font-help);
+  margin-bottom: 0.25rem;
+}
+.conversation-answer {
+  padding: 0 0.1rem 0.8rem;
+  border-bottom: 1px solid var(--line);
+}
+.conversation-answer .field-topline {
+  color: var(--text-secondary);
+}
+.tutor-compose {
+  margin-top: 1rem;
+}
+.tutor-compose > label {
+  display: block;
+  font-size: var(--font-control);
+  color: var(--text);
+  margin-bottom: 0.5rem;
+}
+.tutor-compose textarea {
+  min-height: 120px;
+}
+.tutor-compose-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-top: 0.65rem;
+}
+.tutor-compose-footer > span,
+.tutor-limit {
+  font-size: var(--font-help);
+  color: var(--text-secondary);
+  line-height: 1.75;
+}
+.tutor-limit {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: var(--surface-soft);
+  border-radius: 8px;
+}
+.tutor-panel .inline-error {
+  margin-top: 0.85rem;
+}
+.tutor-panel .inline-error > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.note-kind.read,
+.note-kind.express {
+  color: var(--accent-text);
+}

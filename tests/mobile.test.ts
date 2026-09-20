@@ -448,4 +448,79 @@ describe('mobile lifecycle and request boundaries', () => {
       expect(getElementById('review').innerHTML).not.toContain('class="meaning"');
     }
   });
+  it.each(['read', 'express'] as const)('renders %s learning fields and saved tutoring as escaped, searchable text', async (mode) => {
+    const hostile = '<img src=x onerror=alert(1)> & "';
+    const learning: Entry = {
+      ...entry,
+      mode,
+      original: mode === 'read' ? 'Although it rained, we went for a walk.' : '想礼貌地表达忙不过来。',
+      corrected: 'A sentence.\n\n  Indented sentence.',
+      targetLanguage: mode === 'read' ? '<简体中文>' : 'English',
+      grammarPoints: [{ text: `语法片段 ${hostile}`, explanation: `语法解释 ${hostile}` }],
+      keyPoints: [`要点词 ${hostile}`],
+      alternatives: [{ text: `备选句子 ${hostile}`, tone: `语气词 ${hostile}`, explanation: `备选解释 ${hostile}` }],
+      clarificationQuestions: [`澄清词 ${hostile}`],
+      expressionContext: `场景词 ${hostile}`,
+      expressionTone: `自选语气 ${hostile}`,
+      conversation: [{ id: 'd25a5eae-1fd8-4fb7-a4d7-6e9f91a2b17d', question: `追问词 ${hostile}`, answer: `回答词 ${hostile}\n\n  多行答案`, createdAt: `时间 ${hostile}` }],
+    };
+    const script = new Script(MOBILE_HTML.match(/<script>([\s\S]*?)<\/script>/)![1]);
+    const elements = new Map<string, any>();
+    const getElementById = (id: string) => {
+      if (!elements.has(id)) elements.set(id, {
+        innerHTML: '', textContent: '', value: '', disabled: false,
+        classList: { add() {}, remove() {}, toggle() {} },
+      });
+      return elements.get(id);
+    };
+    const requests: string[] = [];
+    await script.runInNewContext({
+      document: { getElementById, querySelectorAll: () => [], addEventListener() {}, hidden: false },
+      location: { hash: '#test-only-token', pathname: '/' },
+      history: { replaceState() {} },
+      sessionStorage: { getItem: () => null, setItem() {} },
+      fetch: async (url: string) => {
+        requests.push(url);
+        return { ok: true, json: async () => ({ entries: [learning], now: new Date().toISOString() }) };
+      },
+      AbortController, setTimeout, clearTimeout, setInterval: () => 0,
+    });
+    expect(getElementById('review').innerHTML).toContain(mode === 'read' ? '理解句意和结构' : '试着表达你的意思');
+    expect(getElementById('review').innerHTML).not.toContain('要点词');
+    getElementById('reveal').onclick();
+    const revealed = getElementById('review').innerHTML;
+    for (const section of ['语法结构', '要点摘要', '其他表达', '可以再想一想', '表达场景', '表达语气', '追问与回答']) expect(revealed).toContain(section);
+    for (const field of ['语法片段', '语法解释', '要点词', '备选句子', '语气词', '备选解释', '澄清词', '场景词', '自选语气', '追问词', '回答词', '时间']) {
+      expect(revealed).toContain(`${field} &lt;img src=x onerror=alert(1)&gt; &amp; &quot;`);
+    }
+    expect(revealed).toContain('A sentence.\n\n  Indented sentence.');
+    expect(revealed).toContain('\n\n  多行答案');
+    expect(revealed).not.toContain('<img');
+    if (mode === 'read') expect(revealed).toContain('TRANSLATION · &lt;简体中文&gt;');
+    for (const query of ['语法解释', '要点词', '备选解释', '澄清词', '场景词', '自选语气', '追问词', '回答词']) {
+      getElementById('search').value = query;
+      getElementById('search').oninput();
+      expect(getElementById('items').innerHTML).toContain(learning.original);
+    }
+    getElementById('search').value = 'absent-search-term';
+    getElementById('search').oninput();
+    expect(getElementById('items').innerHTML).toContain('没有找到句子');
+    expect(requests).toEqual(['/api/entries']);
+  });
+  it('returns saved reading fields and tutoring through the paired API without adding a model-call endpoint', async () => {
+    const learning: Entry = {
+      ...entry, mode: 'read', corrected: '她去学校。', targetLanguage: '简体中文',
+      grammarPoints: [{ text: 'She', explanation: '主语' }], keyPoints: ['一般现在时'],
+      conversation: [{ id: 'd25a5eae-1fd8-4fb7-a4d7-6e9f91a2b17d', question: '为什么用 goes？', answer: '主语为第三人称单数。', createdAt: new Date().toISOString() }],
+    };
+    const server = new MobileServer({ list: () => [learning], rate: async () => learning });
+    servers.push(server);
+    const status = await server.start('127.0.0.1');
+    const url = new URL(status.urls[0]);
+    const headers = { authorization: 'Bearer ' + url.hash.slice(1) };
+    const response = await fetch(url.origin + '/api/entries', { headers });
+    expect((await response.json()).entries).toEqual([learning]);
+    const unsupported = await fetch(url.origin + '/api/ask', { method: 'POST', headers });
+    expect(unsupported.status).toBe(404);
+  });
 });

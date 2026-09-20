@@ -1,4 +1,27 @@
-export type Mode = 'grammar' | 'translate';
+export type Mode = 'grammar' | 'translate' | 'read' | 'express';
+export interface ExpressionOptions {
+  context?: string;
+  tone?: string;
+}
+export interface GrammarPoint {
+  text: string;
+  explanation: string;
+}
+export interface ExpressionAlternative {
+  text: string;
+  tone: string;
+  explanation: string;
+}
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+export interface ConversationTurn {
+  id: string;
+  question: string;
+  answer: string;
+  createdAt: string;
+}
 export type Provider = 'openai' | 'anthropic' | 'azure' | 'ollama' | 'compatible';
 export type RequestProtocol = 'auto' | 'chat-completions' | 'responses';
 export type Theme = 'system' | 'forest' | 'ocean' | 'lavender' | 'midnight';
@@ -26,6 +49,26 @@ export interface Analysis {
   issues: Issue[];
   tags: string[];
   example: string;
+  grammarPoints?: GrammarPoint[];
+  keyPoints?: string[];
+  alternatives?: ExpressionAlternative[];
+  clarificationQuestions?: string[];
+  expressionContext?: string;
+  expressionTone?: string;
+}
+export interface AnalysisResult extends Analysis {
+  entryId?: string;
+}
+export interface TutorRequest {
+  analysis: Analysis;
+  entryId?: string;
+  history: ChatMessage[];
+  question: string;
+}
+export interface TutorResponse {
+  answer: string;
+  entry?: Entry;
+  syncError?: string | null;
 }
 export interface Review {
   dueAt: string;
@@ -41,6 +84,7 @@ export interface Entry extends Analysis {
   review: Review;
   sourceLanguage: string;
   targetLanguage: string;
+  conversation?: ConversationTurn[];
 }
 export interface Settings {
   theme?: Theme;
@@ -95,7 +139,8 @@ export interface LingoAPI {
   getAppearance(): Promise<AppearanceSettings>;
   saveAppearance(appearance: AppearanceSettings): Promise<AppearanceSettings>;
   getState(): Promise<AppState>;
-  analyze(text: string, mode: Mode): Promise<Analysis>;
+  analyze(text: string, mode: Mode, options?: ExpressionOptions): Promise<AnalysisResult>;
+  ask(request: TutorRequest): Promise<TutorResponse>;
   saveSettings(settings: Settings): Promise<Settings>;
   testProvider(settings: Settings): Promise<string>;
   chooseLibrary(): Promise<string | null>;

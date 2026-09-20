@@ -14,11 +14,28 @@ An English-learning companion for Windows. Select a sentence, check its grammar 
 4. Search your sentences in the Learning Library. In Review, recall the answer before revealing it, then rate how well you remembered it to schedule your next review.
 5. Start a connection under Mobile Sync and scan the QR code with your phone. When both devices are on the same trusted network, mobile review progress is saved directly to the desktop library.
 
-Closing the window minimizes the app to the system tray. Right-click the tray icon to quit completely. LingoLeaf reads and processes input only when you trigger a shortcut or click Analyze; it does not monitor everyday typing.
+Closing the window minimizes the app to the system tray. Right-click the tray icon to quit completely. LingoLeaf processes text when you trigger a shortcut, submit a practice request, or send a follow-up question; it does not monitor everyday typing.
+
+## Reading, expressing ideas, and follow-up questions
+
+The practice page has four modes:
+
+| Mode | What to enter | What you get |
+| --- | --- | --- |
+| Grammar check (语法纠错) | An English sentence | Minimal corrections, explanations, and a translation into your explanation language |
+| Translate (翻译表达) | A sentence in any language | A translation into your configured target language |
+| Reading analysis (阅读解析) | Text in your target language, such as English | A full translation into your explanation language, grammar structure notes anchored to the original text, and a short summary of learning points |
+| Help me express it (帮我表达) | Rough ideas, keywords, or mixed-language notes; optionally a situation and tone | A recommended expression in your target language, two or three alternatives with tone differences, and questions when the meaning needs clarification |
+
+For English-to-Chinese reading, set Target language to **English** and Explanation language to **简体中文**, then select **阅读解析** on the practice page. The existing global shortcuts keep their grammar-check and forward-translation behavior.
+
+Use the follow-up panel on a result, library note, review answer, or selection popup to ask about an explanation or refine an expression. The model receives that result, your question, and recent conversation turns using the same configured provider. Each result supports up to 20 question-and-answer turns. Long histories remain saved; only recent complete turns within a 48,000-character history budget are sent to the model.
+
+Follow-ups on saved learning entries are stored in the desktop library and separate Markdown conversation notes, and can be read on mobile. A grammatically correct sentence excluded by your save preference has a temporary conversation only; its follow-ups are not added to the library. Every new question is an additional model request. Model suggestions and clarifying questions never replace external text automatically.
 
 ## Download and development
 
-Current version: **v0.2.1 preview**. Download the portable Windows x64 executable from [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases), then configure your own model service after launching it.
+Current version: **v0.3.0 preview**. Download the portable Windows x64 executable from [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases), then configure your own model service after launching it.
 
 [![Windows checks](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml)
 
@@ -78,8 +95,10 @@ Under Preferences → Learning notes folder, choose an existing Obsidian vault o
 selected-folder/
 └─ LingoLeaf/
    ├─ index.md            # Learning index organized by review time
-   └─ entries/
-      └─ date-UUID.md     # Original sentence, answer, explanation, practice, and personal notes
+   ├─ entries/
+   │  └─ date-UUID.md     # Original sentence, answer, explanation, practice, and personal notes
+   └─ conversations/
+      └─ entry-UUID-turn-UUID.md  # One immutable follow-up question and answer
 ```
 
 Individual Markdown notes are not overwritten after creation, so you can add your own annotations. The app updates the index. The desktop `library.json` is the authoritative source for review progress. Syncing the Markdown folder lets you read and annotate notes on your phone, but **Markdown edits are not automatically imported into review progress**. Reviewing through the QR connection writes directly to the same desktop library, avoiding conflicting progress on two devices.

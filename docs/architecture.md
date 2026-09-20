@@ -22,6 +22,12 @@ Grammar analysis requests a full translation of the corrected text into the expl
 
 Markdown is a portable learning mirror, not the transactional database. Per-entry files preserve personal annotations; the generated index links to entries and due dates. Directory failures retain the local record and surface a sync error. Moving the configured mirror does not delete the old directory.
 
+Reading mode translates `targetLanguage` into `explanationLanguage`, with grammar points anchored to exact source substrings and a concise learning summary. Expression mode accepts rough ideas plus optional situation/tone and returns a recommendation, alternatives, and clarification questions. Both use the existing `corrected` result field; all additional stored fields remain optional for older libraries. New model responses have mode-specific validation before persistence. These modes run from the practice page and do not use automatic native replacement.
+
+Contextual follow-ups use the same provider transport. `TutorService` validates the IPC request, loads saved context and conversation from the store, excludes entry metadata from the model payload, and prevents concurrent questions on the same record. Each entry retains up to 20 complete turns, while model requests use the most recent complete turns within a 48,000-character history budget. Questions are limited to 4,000 characters and answers to 12,000. Deleted entries cannot be recreated by late answers. Unsaved analysis results can have a temporary renderer conversation without creating a new library entry.
+
+Saved conversations live in the entry's optional `conversation` array. Each successful turn also creates a separate immutable `conversations/<entry-id>-<turn-id>.md` file, linked from the generated index. This avoids rewriting an annotated learning note or an earlier question-and-answer note. Single-file exports include the current complete conversation; mobile review can display it but does not initiate model requests.
+
 Reviews use an auditable SM-2-inspired scheduler in `src/shared/scheduler.ts`. An initial entry is due immediately. A rating updates its interval, ease, repetition count and due date in one serialized transaction.
 
 ## Mobile companion

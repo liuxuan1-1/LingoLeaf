@@ -10,7 +10,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { ResultEvent } from '../shared/types';
+import type { Mode, ResultEvent } from '../shared/types';
 import { api, errorMessage } from './bridge';
 import { ResultView, Spinner, TitleBar } from './components';
 
@@ -18,6 +18,12 @@ export function Popup() {
   const [event, setEvent] = useState<ResultEvent>({ status: 'loading', mode: 'grammar' });
   const [message, setMessage] = useState('');
   const [replacing, setReplacing] = useState(false);
+  const loadingLabels = {
+    grammar: '正在细读你的句子…',
+    translate: '正在寻找恰当的译文…',
+    read: '正在翻译并拆解语法…',
+    express: '正在组织你的想法…',
+  } satisfies Record<Mode, string>;
   useEffect(
     () =>
       api.onResult((value) => {
@@ -55,7 +61,7 @@ export function Popup() {
               <Sparkles size={28} strokeWidth={1.4} />
             </div>
             <span className="eyebrow">A MOMENT OF DISCOVERY</span>
-            <h2>{event.mode === 'grammar' ? '正在细读你的句子…' : '正在寻找恰当的表达…'}</h2>
+            <h2>{loadingLabels[event.mode]}</h2>
             {event.original && (
               <blockquote
                 className={`text-content${/[\r\n]/.test(event.original) ? ' text-multiline' : ''}`}
@@ -84,7 +90,7 @@ export function Popup() {
               <span className="eyebrow">YOU SELECTED</span>
               <p className="text-content">{event.result.original}</p>
             </div>
-            <ResultView result={event.result} notify={(text) => setMessage(text)} compact />
+            <ResultView result={event.result} entryId={event.entryId} notify={(text) => setMessage(text)} compact />
             {event.replaced && (
               <div className="popup-saved">
                 <Check size={15} />
