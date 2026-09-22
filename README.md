@@ -34,7 +34,7 @@ For English-to-Chinese reading, set Translation target language to **English** a
 
 Professional wording is an optional style improvement, even for grammatically correct input. It has its own copy button and explains what makes the wording more suitable for work or formal communication. The grammar verdict and minimal correction stay separate; applying a grammar correction uses that correction, not the professional version. Existing notes remain readable; analyze again to add a professional version to a new note.
 
-![A separate professional rewrite with explanations and writing tips](docs/images/professional-writing-en-dark.jpg)
+![A separate professional rewrite with explanations and writing tips](docs/images/professional-writing-en-dark.png)
 
 Use the follow-up panel on a result, library note, review answer, or selection popup to ask about an explanation or refine an expression. The model receives that result, your question, and recent conversation turns using the same configured provider. Each result supports up to 20 question-and-answer turns. Long histories remain saved; only recent complete turns within a 48,000-character history budget are sent to the model.
 
@@ -67,11 +67,11 @@ The Windows executable is generated in `release/`. Builds currently do not inclu
 
 Under **Settings → Interface language**, choose **简体中文, 繁體中文, English, 日本語, 한국어, or Español**. The choice applies immediately and saves independently, including open result popups. It does not submit unsaved model settings or change your translation/explanation languages. The mobile learning page follows the desktop interface language when reloaded. Saved sentences, explanations, tags, and personal notes keep their original language.
 
-![Six interface languages in the desktop settings](docs/images/interface-languages.jpg)
+![Interface language and appearance settings](docs/images/interface-languages.png)
 
 Under Appearance and Reading (外观与阅读), choose **Forest Cream (松林米白), Sky Blue (晴空蓝白), Lavender (雾紫), or Midnight Dark (午夜深色)**, or follow the Windows light/dark setting. Themes apply to the main interface, forms, learning cards, in-app dialogs, and selection result popups.
 
-![Spanish interface in dark mode with translation and idea shaping on one page](docs/images/expression-es-dark.jpg)
+![Spanish interface in dark mode with translation and idea shaping on one page](docs/images/expression-es-dark.png)
 
 Text sizes are **Standard / Large / Extra Large**, with body text baselines of 16 / 18 / 20px. Large is the default. Descriptions, labels, and buttons use their own readable sizes. Smaller windows reflow and scroll to keep actions accessible when text is enlarged.
 
