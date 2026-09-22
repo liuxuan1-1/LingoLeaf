@@ -6,7 +6,7 @@
 
 An English-learning companion for Windows. Select a sentence, check its grammar or translate it with a keyboard shortcut, and turn everyday expressions into your own learning library.
 
-![LingoLeaf workspace with three clear learning tasks](docs/images/workspace-en.jpg)
+<img width="2240" height="1488" alt="image" src="https://github.com/user-attachments/assets/529aa9ee-0344-4c0b-940c-1e66b3903512" />
 
 *Screenshots use demonstration text. No personal records or credentials are shown.*
 
