@@ -8,8 +8,6 @@ An English-learning companion for Windows. Select a sentence, check its grammar 
 
 <img width="2240" height="1488" alt="image" src="https://github.com/user-attachments/assets/529aa9ee-0344-4c0b-940c-1e66b3903512" />
 
-*Screenshots use demonstration text. No personal records or credentials are shown.*
-
 ## Everyday use
 
 1. Open Settings (偏好设置), choose OpenAI, an OpenAI-compatible service, Anthropic, Azure OpenAI, or Ollama, and enter your endpoint, model, and API key. Test the connection and save.
