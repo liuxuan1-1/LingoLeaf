@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LibraryStore, renderEntryMarkdown } from '../src/main/store';
-import type { Analysis, AppearanceSettings } from '../src/shared/types';
+import type { Analysis, AppearanceSettings, UiLanguage } from '../src/shared/types';
 
 let directory: string;
 const protect = (value: string) => `protected:${Buffer.from(value).toString('base64')}`;
@@ -57,12 +57,14 @@ describe('learning storage', () => {
     delete saved.settings.requestProtocol;
     delete saved.settings.theme;
     delete saved.settings.fontSize;
+    delete saved.settings.uiLanguage;
     await fs.writeFile(configPath, JSON.stringify(saved));
 
     const migrated = makeStore();
     await migrated.init();
     expect(migrated.getSettings().requestProtocol).toBe('auto');
     expect(migrated.getAppearance()).toEqual({ theme: 'forest', fontSize: 'large' });
+    expect(migrated.getUiLanguage()).toBe('zh-CN');
     expect(migrated.getProviderSettings().apiKey).toBe('existing-key');
     expect(migrated.list()).toEqual([entry]);
     await migrated.saveSettings({ ...migrated.getSettings(), requestProtocol: 'responses' });
@@ -710,5 +712,101 @@ describe('reading, expression exploration and saved tutoring', () => {
     expect(markdown).toContain('`````text\n````\n<script>alert(1)</script>\n`````');
     const sidecarDir = path.join(store.getLibraryDirectory(), 'conversations');
     expect(await fs.readFile(path.join(sidecarDir, (await fs.readdir(sidecarDir))[0]), 'utf8')).toContain('`````text\n````\n<script>alert(1)</script>\n`````');
+  });
+});
+
+describe('formal wording persistence and scoped interface language', () => {
+  const professional = {
+    text: 'She attends school.\n\n  - A literal <script> and ``` are preserved.',
+    explanation: '适合正式语境；保留原意与确定程度。',
+    improvements: ['用 attend 描述上学。', '保留 <label> 与多行\n  缩进。'],
+  };
+  it('persists formal wording across restart, Markdown and export without changing corrected', async () => {
+    const store = makeStore();
+    await store.init();
+    const entry = await store.add({ ...analysis, professional }, store.getSettings());
+    expect(entry.corrected).toBe(analysis.corrected);
+    expect(entry.isCorrect).toBe(analysis.isCorrect);
+    const restarted = makeStore();
+    await restarted.init();
+    expect(restarted.list()[0].professional).toEqual(professional);
+    const directory = path.join(store.getLibraryDirectory(), 'entries');
+    const note = await fs.readFile(path.join(directory, (await fs.readdir(directory))[0]), 'utf8');
+    expect(note).toBe(renderEntryMarkdown(entry));
+    expect(note).toContain('## 专业 / 正式表达');
+    expect(note).toContain(professional.text);
+    expect(note).toContain('### 写作提升要点');
+    expect(note).toContain('&lt;label&gt;');
+  });
+  it('keeps old notes and their annotations unchanged without inventing formal wording', async () => {
+    const store = makeStore();
+    await store.init();
+    const entry = await store.add(analysis, store.getSettings());
+    const notes = path.join(store.getLibraryDirectory(), 'entries');
+    const notePath = path.join(notes, (await fs.readdir(notes))[0]);
+    const annotated = (await fs.readFile(notePath, 'utf8')) + '\nMy personal note.';
+    await fs.writeFile(notePath, annotated);
+    const restarted = makeStore();
+    await restarted.init();
+    expect(restarted.list()[0]).not.toHaveProperty('professional');
+    expect(renderEntryMarkdown(entry)).not.toContain('## 专业 / 正式表达');
+    expect(await fs.readFile(notePath, 'utf8')).toBe(annotated);
+  });
+  it('does not store formal grammar wording in other learning modes', async () => {
+    const store = makeStore();
+    await store.init();
+    for (const mode of ['translate', 'read', 'express'] as const) {
+      const entry = await store.add({ ...analysis, mode, professional }, store.getSettings());
+      expect(entry).not.toHaveProperty('professional');
+      expect(renderEntryMarkdown(entry)).not.toContain('## 专业 / 正式表达');
+    }
+  });
+  it('persists every interface language independently of model languages, credentials and learning data', async () => {
+    const store = makeStore();
+    await store.init();
+    await store.saveSettings({ ...store.getSettings(), apiKey: 'private-key', targetLanguage: 'English', explanationLanguage: '日本語' });
+    await store.add(analysis, store.getSettings());
+    const notes = path.join(store.getLibraryDirectory(), 'entries');
+    const paths = [path.join(directory, 'library.json'), path.join(store.getLibraryDirectory(), 'index.md'), path.join(notes, (await fs.readdir(notes))[0])];
+    const before = await Promise.all(paths.map((file) => fs.readFile(file, 'utf8')));
+    for (const language of ['zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'es'] as const) {
+      expect(await store.saveUiLanguage(language)).toBe(language);
+      expect(store.getProviderSettings()).toMatchObject({ uiLanguage: language, apiKey: 'private-key', targetLanguage: 'English', explanationLanguage: '日本語' });
+    }
+    expect(await Promise.all(paths.map((file) => fs.readFile(file, 'utf8')))).toEqual(before);
+    const restarted = makeStore();
+    await restarted.init();
+    expect(restarted.getUiLanguage()).toBe('es');
+    expect(restarted.getProviderSettings().apiKey).toBe('private-key');
+    expect(await fs.readFile(path.join(directory, 'settings.json'), 'utf8')).not.toContain('private-key');
+  });
+  it('merges scoped language changes with queued appearance and stale full settings saves', async () => {
+    const store = makeStore();
+    await store.init();
+    const stale = store.getSettings();
+    await Promise.all([
+      store.saveUiLanguage('ja'),
+      store.saveAppearance({ theme: 'midnight', fontSize: 'extra-large' }),
+      store.saveSettings({ ...stale, model: 'new-model' }),
+      store.saveUiLanguage('es'),
+      store.saveSettings({ ...stale, model: 'latest-model' }),
+    ]);
+    expect(store.getSettings()).toMatchObject({ uiLanguage: 'es', model: 'latest-model', theme: 'midnight', fontSize: 'extra-large' });
+  });
+  it('rejects unsupported language values without writing and recovers after an atomic failure', async () => {
+    const store = makeStore();
+    await store.init();
+    const settingsPath = path.join(directory, 'settings.json');
+    const before = await fs.readFile(settingsPath, 'utf8');
+    const writes = vi.spyOn(fs, 'open');
+    for (const value of [undefined, null, '', 'fr', 'EN', [], {}, { uiLanguage: 'en' }]) {
+      await expect(store.saveUiLanguage(value as UiLanguage)).rejects.toThrow('界面语言无效');
+    }
+    expect(writes).not.toHaveBeenCalled();
+    vi.spyOn(fs, 'rename').mockRejectedValueOnce(new Error('write denied'));
+    await expect(store.saveUiLanguage('ko')).rejects.toThrow('write denied');
+    expect(store.getUiLanguage()).toBe('zh-CN');
+    expect(await fs.readFile(settingsPath, 'utf8')).toBe(before);
+    await expect(store.saveUiLanguage('ko')).resolves.toBe('ko');
   });
 });

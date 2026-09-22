@@ -3,9 +3,11 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import type { Analysis, ChatMessage, ConversationTurn, Entry, Mode } from '../shared/types';
 import { api, errorMessage } from './bridge';
 import { MODE_INFO } from './modes';
+import { useI18n } from './i18n';
 
 export type Notify = (message: string, kind?: 'success' | 'error') => void;
 export function Brand({ compact = false }: { compact?: boolean }) {
+  const { t } = useI18n();
   return (
     <div className={`brand ${compact ? 'compact' : ''}`}>
       <span className="brand-icon">
@@ -15,22 +17,23 @@ export function Brand({ compact = false }: { compact?: boolean }) {
         <strong>
           LingoLeaf<span>.</span>
         </strong>
-        {!compact && <small>一点积累，自然生长</small>}
+        {!compact && <small>{t('一点积累，自然生长', 'A little progress, every day')}</small>}
       </div>
     </div>
   );
 }
 export function TitleBar({ popup = false }: { popup?: boolean }) {
+  const { t } = useI18n();
   return (
     <div className={`titlebar ${popup ? 'popup-titlebar' : ''}`}>
-      <span>{popup ? <Brand compact /> : 'LINGOLEAF / A LITTLE, EVERY DAY'}</span>
+      <span>{popup ? <Brand compact /> : t('LINGOLEAF / 每天进步一点', 'LINGOLEAF / A LITTLE, EVERY DAY')}</span>
       <div className="window-controls">
-        <button aria-label="最小化" title="最小化" onClick={api.minimize}>
+        <button aria-label={t('最小化', 'Minimize')} title={t('最小化', 'Minimize')} onClick={api.minimize}>
           <Minus size={15} />
         </button>
         <button
-          aria-label={popup ? '关闭弹窗' : '隐藏到系统托盘'}
-          title={popup ? '关闭弹窗' : '隐藏到系统托盘，快捷键继续工作'}
+          aria-label={popup ? t('关闭弹窗', 'Close popup') : t('隐藏到系统托盘', 'Hide to system tray')}
+          title={popup ? t('关闭弹窗', 'Close popup') : t('隐藏到系统托盘，快捷键继续工作', 'Hide to system tray; shortcuts remain active')}
           className="window-close"
           onClick={api.close}
         >
@@ -40,11 +43,12 @@ export function TitleBar({ popup = false }: { popup?: boolean }) {
     </div>
   );
 }
-export function Spinner({ label = '正在处理' }: { label?: string }) {
+export function Spinner({ label }: { label?: string }) {
+  const { t } = useI18n();
   return (
     <span className="loading-inline">
       <LoaderCircle size={17} className="spin" />
-      {label}
+      {label ?? t('正在处理', 'Working')}
     </span>
   );
 }
@@ -65,12 +69,13 @@ export function Shortcut({ value }: { value: string }) {
 export function CopyButton({
   text,
   notify,
-  label = '复制',
+  label,
 }: {
   text: string;
   notify?: Notify;
   label?: string;
 }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -86,7 +91,7 @@ export function CopyButton({
       }}
     >
       {copied ? <Check size={15} /> : <Copy size={15} />}
-      {copied ? '已复制' : label}
+      {copied ? t('已复制', 'Copied') : label ?? t('复制', 'Copy')}
     </button>
   );
 }
@@ -143,14 +148,21 @@ export function ResultView({
   compact?: boolean;
   entryId?: string;
 }) {
+  const { t } = useI18n();
   const saved = result as Partial<Entry>;
   const savedId = entryId || saved.id;
   const grammarIssues = result.issues.filter((issue) => issue.kind === 'grammar');
   const content = {
-    grammar: { title: result.isCorrect ? '这句话，语法没有错误' : `发现 ${grammarIssues.length || result.issues.length || 1} 处可以改进的语法`, caption: result.isCorrect ? 'LOOKING GOOD' : 'A CHANCE TO GROW', field: '建议表达' },
-    translate: { title: '让表达，跨越语言', caption: 'TRANSLATION', field: '译文' },
-    read: { title: '读懂意思，也理解结构', caption: 'READ & UNDERSTAND', field: '译文' },
-    express: { title: '为你的意思，找到合适的表达', caption: 'FIND YOUR WORDS', field: '推荐表达' },
+    grammar: {
+      title: result.isCorrect ? t('这句话，语法没有错误', 'This sentence is grammatically correct')
+        : grammarIssues.length ? t('发现 {count} 处可以改进的语法', '{count} grammar corrections to learn from', { count: grammarIssues.length })
+        : t('这句话的语法需要调整', 'This sentence needs a grammar adjustment'),
+      caption: result.isCorrect ? t('语法检查通过', 'LOOKING GOOD') : t('理解这次修改', 'A CHANCE TO GROW'),
+      field: t('语法修正', 'Grammar correction'),
+    },
+    translate: { title: t('让表达，跨越语言', 'Let your words cross languages'), caption: t('翻译', 'TRANSLATION'), field: t('译文', 'Translation') },
+    read: { title: t('读懂意思，也理解结构', 'Understand the meaning and structure'), caption: t('阅读与理解', 'READ & UNDERSTAND'), field: t('译文', 'Translation') },
+    express: { title: t('为你的意思，找到合适的表达', 'Find the right words for your meaning'), caption: t('组织你的表达', 'FIND YOUR WORDS'), field: t('推荐表达', 'Suggested expression') },
   } satisfies Record<Mode, { title: string; caption: string; field: string }>;
   const current = content[result.mode];
   const StatusIcon = result.mode === 'grammar' ? CheckCheck : MODE_INFO[result.mode].icon;
@@ -172,8 +184,8 @@ export function ResultView({
       </div>
       {result.mode === 'express' && (result.expressionContext || result.expressionTone) && (
         <dl className="expression-context">
-          {result.expressionContext && <><dt>场景</dt><dd className="text-content">{result.expressionContext}</dd></>}
-          {result.expressionTone && <><dt>语气</dt><dd className="text-content">{result.expressionTone}</dd></>}
+          {result.expressionContext && <><dt>{t('场景', 'Context')}</dt><dd className="text-content">{result.expressionContext}</dd></>}
+          {result.expressionTone && <><dt>{t('语气', 'Tone')}</dt><dd className="text-content">{result.expressionTone}</dd></>}
         </dl>
       )}
       <div className="result-sentence">
@@ -188,8 +200,8 @@ export function ResultView({
       {result.mode === 'grammar' && result.translation && (
         <div className="result-sentence result-translation">
           <div className="field-topline">
-            <span>句意{result.translationLanguage ? ` · ${result.translationLanguage}` : ''}</span>
-            <CopyButton text={result.translation} notify={notify} label="复制译文" />
+            <span>{t('句意', 'Meaning')}{result.translationLanguage ? ` · ${result.translationLanguage}` : ''}</span>
+            <CopyButton text={result.translation} notify={notify} label={t('复制译文', 'Copy translation')} />
           </div>
           <p className="text-content">{result.translation}</p>
         </div>
@@ -198,8 +210,8 @@ export function ResultView({
         <p className="result-explanation text-content">{result.explanation}</p>
       )}
       {!!result.grammarPoints?.length && (
-        <section className="learning-section" aria-label="语法解析">
-          <h4 className="section-label">语法解析 <span>{result.grammarPoints.length}</span></h4>
+        <section className="learning-section" aria-label={t('语法解析', 'Grammar breakdown')}>
+          <h4 className="section-label">{t('语法解析', 'Grammar breakdown')} <span>{result.grammarPoints.length}</span></h4>
           <ol className="grammar-point-list">
             {result.grammarPoints.map((point, index) => (
               <li key={index}>
@@ -211,20 +223,20 @@ export function ResultView({
         </section>
       )}
       {!!result.keyPoints?.length && (
-        <section className="learning-section key-points" aria-label="要点摘要">
-          <h4 className="section-label">要点摘要</h4>
+        <section className="learning-section key-points" aria-label={t('要点摘要', 'Key points')}>
+          <h4 className="section-label">{t('要点摘要', 'Key points')}</h4>
           <ul>{result.keyPoints.map((point, index) => <li className="text-content" key={index}>{point}</li>)}</ul>
         </section>
       )}
       {!!result.alternatives?.length && (
-        <section className="learning-section" aria-label="其他表达与区别">
-          <h4 className="section-label">其他表达与区别</h4>
+        <section className="learning-section" aria-label={t('其他表达与区别', 'Alternatives and differences')}>
+          <h4 className="section-label">{t('其他表达与区别', 'Alternatives and differences')}</h4>
           <div className="expression-alternatives">
             {result.alternatives.map((alternative, index) => (
               <article className="expression-alternative" key={index}>
                 <div className="field-topline">
-                  <span>{alternative.tone || `表达 ${index + 1}`}</span>
-                  <CopyButton text={alternative.text} notify={notify} label="复制表达" />
+                  <span>{alternative.tone || t('表达 {count}', 'Option {count}', { count: index + 1 })}</span>
+                  <CopyButton text={alternative.text} notify={notify} label={t('复制表达', 'Copy expression')} />
                 </div>
                 <p className="alternative-text text-content">{alternative.text}</p>
                 <p className="alternative-reason text-content">{alternative.explanation}</p>
@@ -234,41 +246,56 @@ export function ResultView({
         </section>
       )}
       {!!result.clarificationQuestions?.length && (
-        <section className="learning-section clarification" aria-label="可以补充的信息">
-          <h4 className="section-label">补充这些信息，表达会更贴切</h4>
+        <section className="learning-section clarification" aria-label={t('可以补充的信息', 'Details you can add')}>
+          <h4 className="section-label">{t('补充这些信息，表达会更贴切', 'Add these details for a better fit')}</h4>
           <ul>{result.clarificationQuestions.map((question, index) => <li className="text-content" key={index}>{question}</li>)}</ul>
-          <p>可以在下方追问中补充你的答案。</p>
+          <p>{t('可以在下方追问中补充你的答案。', 'You can add your answers in the follow-up below.')}</p>
         </section>
       )}
       {result.issues.length > 0 && (
         <div className="issues">
           <div className="section-label">
-            理解每一个改变 <span>{result.issues.length}</span>
+            {t('理解每一个改变', 'Understand each change')} <span>{result.issues.length}</span>
           </div>
           {result.issues.map((issue, i) => (
             <article className="issue" key={i}>
               <div className="issue-header">
                 <span className="issue-number">{String(i + 1).padStart(2, '0')}</span>
                 <strong className="text-content">
-                  {issue.rule || (issue.kind === 'grammar' ? '语法修改' : '表达建议')}
+                  {issue.rule || (issue.kind === 'grammar' ? t('语法修改', 'Grammar correction') : t('表达建议', 'Expression suggestion'))}
                 </strong>
                 <span className={`tag ${issue.kind === 'style' ? 'neutral' : 'amber'}`}>
-                  {issue.kind === 'style' ? '风格建议' : '语法'}
+                  {issue.kind === 'style' ? t('风格建议', 'Style suggestion') : t('语法', 'Grammar')}
                 </span>
               </div>
               <div className="issue-diff">
-                <del className="text-content">{issue.original || '（省略）'}</del>
+                <del className="text-content">{issue.original || t('（省略）', '(omitted)')}</del>
                 <ChevronRight size={14} />
-                <ins className="text-content">{issue.replacement || '（删除）'}</ins>
+                <ins className="text-content">{issue.replacement || t('（删除）', '(removed)')}</ins>
               </div>
               <p className="text-content">{issue.explanation}</p>
             </article>
           ))}
         </div>
       )}
+      {result.mode === 'grammar' && result.professional && (
+        <section className="professional-section learning-section" aria-label={t('更正式／专业的表达', 'A more professional expression')}>
+          <div className="field-topline">
+            <h4 className="section-label">{t('更正式／专业的表达', 'A more professional expression')}</h4>
+            <CopyButton text={result.professional.text} notify={notify} label={t('复制专业表达', 'Copy professional version')} />
+          </div>
+          <p className="professional-caption">{t('可选的风格提升，不代表原句存在语法错误。根据对象和场景选择使用。', 'An optional style improvement, not a grammar error. Choose it when it suits your audience and context.')}</p>
+          <p className="professional-text text-content" lang="en">{result.professional.text}</p>
+          <p className="text-content">{result.professional.explanation}</p>
+          {!!result.professional.improvements.length && <>
+            <h5>{t('可以学到的表达要点', 'What you can learn from this rewrite')}</h5>
+            <ul>{result.professional.improvements.map((item, index) => <li className="text-content" key={index}>{item}</li>)}</ul>
+          </>}
+        </section>
+      )}
       {result.example && (
         <div className="example-block">
-          <span className="eyebrow">TRY ANOTHER SENTENCE</span>
+          <span className="eyebrow">{t('再看一个例句', 'TRY ANOTHER SENTENCE')}</span>
           <p className="text-content">{result.example}</p>
         </div>
       )}
@@ -293,6 +320,7 @@ function TutorPanel({ analysis, entryId, initialTurns, notify }: {
   initialTurns: ConversationTurn[];
   notify?: Notify;
 }) {
+  const { language, t } = useI18n();
   const [open, setOpen] = useState(false);
   const [turns, setTurns] = useState<ConversationTurn[]>(initialTurns);
   const [question, setQuestion] = useState('');
@@ -327,7 +355,7 @@ function TutorPanel({ analysis, entryId, initialTurns, notify }: {
       const state = await api.getState();
       if (!mounted.current || sequence !== loadSequence.current) return;
       const entry = state.entries.find((item) => item.id === entryId);
-      if (!entry) throw new Error('这条笔记已不存在，请重新分析原文后继续。');
+      if (!entry) throw new Error(t('这条笔记已不存在，请重新分析原文后继续。', 'This note no longer exists. Analyze the original text again to continue.'));
       setTurns(entry.conversation || []);
       setSyncError(state.syncError || '');
       setLoaded(true);
@@ -347,7 +375,7 @@ function TutorPanel({ analysis, entryId, initialTurns, notify }: {
       if (submitting.current) { refreshAfterSend.current = true; return; }
       void loadHistory();
     });
-  }, [open, entryId]);
+  }, [open, entryId, language]);
   const send = async () => {
     const value = question.trim();
     if (!value || submitting.current || !loaded || loading || turns.length >= 20) return;
@@ -365,7 +393,7 @@ function TutorPanel({ analysis, entryId, initialTurns, notify }: {
     try {
       const response = await api.ask({ analysis, entryId, history, question: value });
       if (!mounted.current) return;
-      if (entryId && !response.entry) throw new Error('回答没有保存成功，请重试。');
+      if (entryId && !response.entry) throw new Error(t('回答没有保存成功，请重试。', 'The answer could not be saved. Please try again.'));
       setTurns(response.entry?.conversation || [...turns, {
         id: `local-${Date.now()}`, question: value, answer: response.answer, createdAt: new Date().toISOString(),
       }]);
@@ -386,47 +414,47 @@ function TutorPanel({ analysis, entryId, initialTurns, notify }: {
     }
   };
   return (
-    <section className="tutor-panel" aria-label="关于这条结果的追问">
+    <section className="tutor-panel" aria-label={t('关于这条结果的追问', 'Follow up on this result')}>
       <button className="tutor-toggle" aria-expanded={open} aria-controls={panelId}
         onClick={() => setOpen((value) => !value)}>
         <MessageCircle size={19} />
-        <span><strong>还想问问？</strong><small>继续理解这条结果{turns.length ? ` · ${turns.length} 轮对话` : ''}</small></span>
+        <span><strong>{t('还想问问？', 'Any more questions?')}</strong><small>{t('继续理解这条结果', 'Explore this result further')}{turns.length ? ` · ${t('{count} 轮对话', '{count} conversation turns', { count: turns.length })}` : ''}</small></span>
         <ChevronDown size={18} className={open ? 'is-open' : ''} />
       </button>
       {open && <div className="tutor-content" id={panelId}>
-        <p className="tutor-caption">追问结合当前结果和近期对话回答。
-          {entryId ? '回答会随这条学习笔记保存在本机，并同步到 Markdown。' : '这条结果未收藏，对话仅在当前页面保留；离开页面或重新分析会清空。'}</p>
-        {loading && <Spinner label="正在载入这条笔记的对话…" />}
+        <p className="tutor-caption">{t('追问结合当前结果和近期对话回答。', 'Answers use this result and your recent conversation.')} {' '}
+          {entryId ? t('回答会随这条学习笔记保存在本机，并同步到 Markdown。', 'Answers are saved locally with this note and synced to Markdown.') : t('这条结果未收藏，对话仅在当前页面保留；离开页面或重新分析会清空。', 'This result is not saved. The conversation lasts only while this result is open; switching tasks or analyzing again clears it.')}</p>
+        {loading && <Spinner label={t('正在载入这条笔记的对话…', 'Loading this note’s conversation…')} />}
         {loadError && <div className="inline-error" role="alert"><CircleAlert size={17} /><div>
-          <p>{loadError}</p><button className="text-button" onClick={() => void loadHistory()}>重新载入对话</button>
+          <p>{loadError}</p><button className="text-button" onClick={() => void loadHistory()}>{t('重新载入对话', 'Reload conversation')}</button>
         </div></div>}
         {loaded && <>
-          <div className="conversation-list" ref={conversationRef} aria-label="追问记录" tabIndex={turns.length ? 0 : undefined} aria-live="polite" aria-relevant="additions text">
+          <div className="conversation-list" ref={conversationRef} aria-label={t('追问记录', 'Conversation history')} tabIndex={turns.length ? 0 : undefined} aria-live="polite" aria-relevant="additions text">
             {turns.map((turn, index) => <article className="conversation-turn" key={turn.id}>
-              <div className="conversation-question"><span>你 · {index + 1}</span><p className="text-content">{turn.question}</p></div>
-              <div className="conversation-answer"><div className="field-topline"><span>语言助手</span>
-                <CopyButton text={turn.answer} label="复制回答" notify={notify} /></div>
+              <div className="conversation-question"><span>{t('你', 'You')} · {index + 1}</span><p className="text-content">{turn.question}</p></div>
+              <div className="conversation-answer"><div className="field-topline"><span>{t('语言助手', 'Language tutor')}</span>
+                <CopyButton text={turn.answer} label={t('复制回答', 'Copy answer')} notify={notify} /></div>
                 <p className="text-content">{turn.answer}</p>
               </div>
             </article>)}
-            {busy && <article className="conversation-turn pending"><div className="conversation-question"><span>你</span><p className="text-content">{pendingQuestion}</p></div><Spinner label="正在整理解释…" /></article>}
+            {busy && <article className="conversation-turn pending"><div className="conversation-question"><span>{t('你', 'You')}</span><p className="text-content">{pendingQuestion}</p></div><Spinner label={t('正在整理解释…', 'Preparing an explanation…')} /></article>}
           </div>
           {syncError && <div className="inline-error" role="alert"><CircleAlert size={17} /><div>
-            <strong>对话已保存到学习库，Markdown 同步未完成</strong><p>{syncError}</p>
+            <strong>{t('对话已保存到学习库，Markdown 同步未完成', 'Conversation saved to your library; Markdown sync is incomplete')}</strong><p>{syncError}</p>
           </div></div>}
-          {turns.length >= 20 ? <p className="tutor-limit" role="status">这条结果已达到 20 轮追问上限。可以回到工作台开始新的练习。</p> : (
+          {turns.length >= 20 ? <p className="tutor-limit" role="status">{t('这条结果已达到 20 轮追问上限。可以回到工作台开始新的练习。', 'This result has reached the limit of 20 follow-up turns. Start a new practice from the workbench.')}</p> : (
             <div className="tutor-compose">
-              <label htmlFor={`${panelId}-question`}>你的问题或补充信息</label>
+              <label htmlFor={`${panelId}-question`}>{t('你的问题或补充信息', 'Your question or additional details')}</label>
               <textarea ref={inputRef} id={`${panelId}-question`} value={question} maxLength={4000} rows={3}
-                disabled={busy} placeholder="例如：为什么这里用过去完成时？能再举个更日常的例子吗？"
+                disabled={busy} placeholder={t('例如：为什么这里用过去完成时？能再举个更日常的例子吗？', 'For example: Why use the past perfect here? Could you give a more everyday example?')}
                 onChange={(event) => { setQuestion(event.target.value); setError(''); }}
                 onKeyDown={(event) => {
                   if (!event.nativeEvent.isComposing && (event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); void send(); }
                 }} />
-              {error && <div className="inline-error" role="alert"><CircleAlert size={17} /><div><strong>追问没有完成</strong><p>{error}</p><p>问题已保留，可重试。</p></div></div>}
-              <div className="tutor-compose-footer"><span>{question.length.toLocaleString()} / 4,000 · {turns.length} / 20 轮</span>
+              {error && <div className="inline-error" role="alert"><CircleAlert size={17} /><div><strong>{t('追问没有完成', 'The follow-up could not be completed')}</strong><p>{error}</p><p>{t('问题已保留，可重试。', 'Your question is kept. You can try again.')}</p></div></div>}
+              <div className="tutor-compose-footer"><span>{question.length.toLocaleString(language)} / {Number(4000).toLocaleString(language)} · {t('{count} / 20 轮', '{count} / 20 turns', { count: turns.length })}</span>
                 <button className="button primary small" disabled={busy || !question.trim() || loading} onClick={() => void send()} title="Ctrl + Enter">
-                  {busy ? <Spinner label="回答中" /> : <><Send size={15} />{error ? '重试追问' : '发送追问'}</>}
+                  {busy ? <Spinner label={t('回答中', 'Answering')} /> : <><Send size={15} />{error ? t('重试追问', 'Retry question') : t('发送追问', 'Send question')}</>}
                 </button>
               </div>
             </div>
@@ -445,6 +473,7 @@ export function Modal({
   children: ReactNode;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const ref = useRef<HTMLElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -487,7 +516,7 @@ export function Modal({
       >
         <div className="modal-header">
           <h2 id={titleId}>{title}</h2>
-          <button className="icon-button" aria-label="关闭" onClick={onClose}>
+          <button className="icon-button" aria-label={t('关闭', 'Close')} onClick={onClose}>
             <X size={20} />
           </button>
         </div>
@@ -518,6 +547,6 @@ export function Toggle({
     </label>
   );
 }
-export function formatDate(value: string) {
-  return new Date(value).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+export function formatDate(value: string, locale = 'zh-CN') {
+  return new Date(value).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 }

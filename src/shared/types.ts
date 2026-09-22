@@ -1,4 +1,10 @@
 export type Mode = 'grammar' | 'translate' | 'read' | 'express';
+export type UiLanguage = 'zh-CN' | 'zh-TW' | 'en' | 'ja' | 'ko' | 'es';
+export interface ProfessionalExpression {
+  text: string;
+  explanation: string;
+  improvements: string[];
+}
 export interface ExpressionOptions {
   context?: string;
   tone?: string;
@@ -55,6 +61,7 @@ export interface Analysis {
   clarificationQuestions?: string[];
   expressionContext?: string;
   expressionTone?: string;
+  professional?: ProfessionalExpression;
 }
 export interface AnalysisResult extends Analysis {
   entryId?: string;
@@ -87,6 +94,7 @@ export interface Entry extends Analysis {
   conversation?: ConversationTurn[];
 }
 export interface Settings {
+  uiLanguage?: UiLanguage;
   theme?: Theme;
   fontSize?: FontSize;
   provider: Provider;
@@ -136,6 +144,8 @@ export interface MobileStatus {
   token?: string;
 }
 export interface LingoAPI {
+  getUiLanguage(): Promise<UiLanguage>;
+  saveUiLanguage(language: UiLanguage): Promise<UiLanguage>;
   getAppearance(): Promise<AppearanceSettings>;
   saveAppearance(appearance: AppearanceSettings): Promise<AppearanceSettings>;
   getState(): Promise<AppState>;

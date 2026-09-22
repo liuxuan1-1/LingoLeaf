@@ -1,0 +1,47 @@
+{
+  "corrected": "Hey Alex, can you send me the missing stuff today? I think we might finish by Friday.",
+  "translation": "Hey Alex, can you send me the missing stuff today? I think we might finish by Friday.",
+  "isCorrect": true,
+  "explanation": "Your text is grammatically correct and natural in an informal message. “Can you” correctly forms a request, and “might finish” expresses possibility rather than certainty. The suggested changes are optional tone adjustments, not grammar corrections.",
+  "issues": [
+    {
+      "original": "Hey Alex",
+      "replacement": "Hi Alex",
+      "explanation": "“Hey” is fine informally; “Hi” is a more neutral choice for workplace communication.",
+      "rule": "Choose a greeting that matches the level of formality.",
+      "kind": "style"
+    },
+    {
+      "original": "can you",
+      "replacement": "could you",
+      "explanation": "Both forms are correct. “Could you” makes the request slightly more polite.",
+      "rule": "Use “could you” for a softer request.",
+      "kind": "style"
+    },
+    {
+      "original": "missing stuff",
+      "replacement": "missing items",
+      "explanation": "“Stuff” is grammatical but informal and broad. “Items” is a more neutral alternative without assuming what is missing.",
+      "rule": "Prefer neutral or specific nouns in formal writing.",
+      "kind": "style"
+    }
+  ],
+  "tags": [
+    "polite requests",
+    "professional tone",
+    "expressing uncertainty"
+  ],
+  "example": "Hi Maya, could you send me the remaining files today? We might complete the review by Monday.",
+  "professional": {
+    "text": "Hi Alex, could you send me the missing items today? I think we might finish by Friday.",
+    "explanation": "“Hi” provides a neutral workplace greeting, “could you” makes the request slightly more polite, and “missing items” is less colloquial than “missing stuff.” The deadline and the uncertainty about finishing by Friday remain unchanged.",
+    "improvements": [
+      "Use a neutral greeting such as “Hi” for a professional but friendly tone.",
+      "Use “could you” to soften a request without changing its timing.",
+      "Replace informal words such as “stuff” with a neutral term, or name the items when the context allows."
+    ]
+  },
+  "original": "Hey Alex, can you send me the missing stuff today? I think we might finish by Friday.",
+  "mode": "grammar",
+  "translationLanguage": "English"
+}

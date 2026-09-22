@@ -6,9 +6,10 @@ import path from 'node:path';
 import { Script } from 'node:vm';
 import QRCode from 'qrcode';
 import { MobileServer } from '../src/main/mobile';
-import { MOBILE_HTML } from '../src/main/mobile-page';
+import { MOBILE_HTML, renderMobilePage } from '../src/main/mobile-page';
 import { LibraryStore } from '../src/main/store';
-import type { Entry, Rating } from '../src/shared/types';
+import type { Entry, Rating, UiLanguage } from '../src/shared/types';
+import * as i18n from '../src/shared/i18n';
 import { initialReview, scheduleReview } from '../src/shared/scheduler';
 
 vi.mock('node:os', async (importOriginal) => {
@@ -496,7 +497,7 @@ describe('mobile lifecycle and request boundaries', () => {
     expect(revealed).toContain('A sentence.\n\n  Indented sentence.');
     expect(revealed).toContain('\n\n  多行答案');
     expect(revealed).not.toContain('<img');
-    if (mode === 'read') expect(revealed).toContain('TRANSLATION · &lt;简体中文&gt;');
+    if (mode === 'read') expect(revealed).toContain('译文 · &lt;简体中文&gt;');
     for (const query of ['语法解释', '要点词', '备选解释', '澄清词', '场景词', '自选语气', '追问词', '回答词']) {
       getElementById('search').value = query;
       getElementById('search').oninput();
@@ -522,5 +523,101 @@ describe('mobile lifecycle and request boundaries', () => {
     expect((await response.json()).entries).toEqual([learning]);
     const unsupported = await fetch(url.origin + '/api/ask', { method: 'POST', headers });
     expect(unsupported.status).toBe(404);
+  });
+});
+
+async function renderPhone(language: UiLanguage, items: Entry[]) {
+  const elements = new Map<string, any>();
+  const element = (id: string) => {
+    if (!elements.has(id)) elements.set(id, {
+      innerHTML: '', textContent: '', value: '', disabled: false,
+      classList: { add() {}, remove() {}, toggle() {} },
+    });
+    return elements.get(id);
+  };
+  const page = renderMobilePage(language);
+  const script = new Script(page.match(/<script>([\s\S]*?)<\/script>/)![1]);
+  const requests: string[] = [];
+  await script.runInNewContext({
+    document: { getElementById: element, querySelectorAll: () => [], addEventListener() {}, hidden: false },
+    location: { hash: '#test-only-token', pathname: '/' }, history: { replaceState() {} },
+    sessionStorage: { getItem: () => null, setItem() {} },
+    fetch: async (url: string) => { requests.push(url); return { ok: true, json: async () => ({ entries: items, now: new Date().toISOString() }) }; },
+    AbortController, setTimeout, clearTimeout, setInterval: () => 0,
+  });
+  return { page, element, requests };
+}
+
+describe('localized mobile UI and professional writing', () => {
+  it('renders and searches professional wording as literal text without rewriting saved learning content', async () => {
+    const formal: Entry = { ...entry, professional: {
+      text: 'She attends school.\n\n  <img src=x onerror=alert(1)>',
+      explanation: '正式说明 & <tag>', improvements: ['提升要点 <script>'],
+    } };
+    const phone = await renderPhone('en', [formal]);
+    expect(phone.page).toContain('<html lang="en">');
+    expect(phone.page).toContain('Search sentences and grammar rules…');
+    expect(phone.page).not.toContain('正在连接');
+    expect(phone.element('summary').textContent).toBe('1 saved sentences · 1 due for review');
+    expect(phone.element('status').textContent).toBe('● Connected to desktop');
+    expect(phone.element('review').innerHTML).not.toContain('She attends');
+    phone.element('reveal').onclick();
+    const result = phone.element('review').innerHTML;
+    expect(result).toContain('Professional / formal wording');
+    expect(result).toContain('Writing improvements');
+    expect(result).toContain('She attends school.\n\n  &lt;img src=x onerror=alert(1)&gt;');
+    expect(result).toContain('正式说明 &amp; &lt;tag&gt;');
+    expect(result).toContain('提升要点 &lt;script&gt;');
+    expect(result).toContain(entry.corrected);
+    expect(result).not.toContain('<img');
+    for (const query of ['attends', '正式说明', '提升要点']) {
+      phone.element('search').value = query;
+      phone.element('search').oninput();
+      expect(phone.element('items').innerHTML).toContain(entry.original);
+    }
+    phone.element('search').value = 'absent-search-term';
+    phone.element('search').oninput();
+    expect(phone.element('items').innerHTML).toContain('No sentences found.');
+    expect(phone.requests).toEqual(['/api/entries']);
+  });
+  it('does not invent a professional section for legacy entries', async () => {
+    const phone = await renderPhone('en', [entry]);
+    phone.element('reveal').onclick();
+    expect(phone.element('review').innerHTML).not.toContain('Professional / formal wording');
+  });
+  it.each(['zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'es'] as const)('ships a valid %s page and client with the correct document language', (language) => {
+    const page = renderMobilePage(language);
+    expect(page).toContain(`<html lang="${language}">`);
+    expect(() => new Script(page.match(/<script>([\s\S]*?)<\/script>/)![1])).not.toThrow();
+  });
+  it('escapes translated chrome before embedding it in HTML and JavaScript', async () => {
+    const hostile = '</script><img src=x onerror=alert(1)> & "\u2028\u2029';
+    vi.spyOn(i18n, 'createTranslator').mockReturnValue(() => hostile);
+    const phone = await renderPhone('en', [entry]);
+    expect(phone.page.match(/<\/script>/g)).toHaveLength(1);
+    expect(phone.page).not.toContain('<img');
+    expect(phone.page).toContain('\\u003c/script\\u003e');
+    expect(phone.page).toContain('\\u2028');
+    phone.element('reveal').onclick();
+    expect(phone.element('review').innerHTML).toContain('&lt;/script&gt;');
+    expect(phone.element('review').innerHTML).not.toContain('<img');
+  });
+  it('serves the current desktop language and localized pairing errors without exposing settings', async () => {
+    let language: UiLanguage = 'en';
+    const server = new MobileServer({ getUiLanguage: () => language, list: () => [entry], rate: async () => entry });
+    servers.push(server);
+    const status = await server.start('127.0.0.1');
+    const url = new URL(status.urls[0]);
+    const english = await (await fetch(url.origin)).text();
+    expect(english).toContain('Make progress today.');
+    expect(english).not.toContain(entry.original);
+    const denied = await fetch(url.origin + '/api/entries');
+    expect(denied.status).toBe(401);
+    expect((await denied.json()).error).toBe('This connection has expired. Scan the desktop QR code again.');
+    language = 'zh-CN';
+    const chinese = await (await fetch(url.origin)).text();
+    expect(chinese).toContain('让进步，发生在今天。');
+    expect(chinese).not.toContain('apiKey');
+    expect(chinese).not.toContain(url.hash.slice(1));
   });
 });

@@ -1,3 +1,4 @@
+import { useI18n } from './i18n';
 import { ArrowRight, BookOpenCheck, Check, Eye, Flower2, RotateCcw, Sprout } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Entry, Mode, Rating } from '../shared/types';
@@ -17,6 +18,7 @@ export function ReviewPage({
   onPractice: () => void;
   now: number;
 }) {
+  const { language, t } = useI18n();
   const [revealed, setRevealed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reviewed, setReviewed] = useState(0);
@@ -29,10 +31,10 @@ export function ReviewPage({
   );
   const current = queue[0];
   const prompts = {
-    grammar: { label: '找到语法问题，试着修改', hint: '哪里需要修改？为什么？在心里先说出你的答案。' },
-    translate: { label: `试着翻译为 ${current?.targetLanguage || ''}`, hint: '不急着看答案，先用目标语言完整表达一次。' },
-    read: { label: '回想句意、语法结构与要点', hint: '这段话在说什么？试着解释句子结构，再总结它的要点。' },
-    express: { label: '回想怎样自然地表达这个意思', hint: '结合原来的场景与语气，先组织一种自然的说法。' },
+    grammar: { label: t("找到语法问题，试着修改", "Find the grammar issue and try to fix it"), hint: t("哪里需要修改？为什么？在心里先说出你的答案。", "What needs changing, and why? Think of your answer first.") },
+    translate: { label: t('试着翻译为 {language}', 'Try translating into {language}', { language: current?.targetLanguage || '' }), hint: t("不急着看答案，先用目标语言完整表达一次。", "Before looking, try expressing the whole sentence in the target language.") },
+    read: { label: t("回想句意、语法结构与要点", "Recall the meaning, structure and key points"), hint: t("这段话在说什么？试着解释句子结构，再总结它的要点。", "What does the text mean? Explain the structure and summarize its main points.") },
+    express: { label: t("回想怎样自然地表达这个意思", "Recall a natural way to express this idea"), hint: t("结合原来的场景与语气，先组织一种自然的说法。", "Use the original context and tone to form a natural expression.") },
   } satisfies Record<Mode, { label: string; hint: string }>;
   const upcoming = [...entries]
     .filter((entry) => new Date(entry.review.dueAt).getTime() > Date.now())
@@ -80,13 +82,13 @@ export function ReviewPage({
   return (
     <>
       <SectionHeading
-        eyebrow="A LITTLE RECALL GOES A LONG WAY"
-        title="温故，才能知新。"
-        description="先试着回想，再揭晓答案。按照你的掌握程度，安排下一次相见。"
+        eyebrow={t("温习一点，记得更久", "A LITTLE RECALL GOES A LONG WAY")}
+        title={t("温故，才能知新。", "Recall today. Remember tomorrow.")}
+        description={t("先试着回想，再揭晓答案。按照你的掌握程度，安排下一次相见。", "Recall first, then reveal the answer. Your confidence sets the next review.")}
         action={
           <span className="review-total">
             <Flower2 size={18} />
-            本次已温习 <strong>{reviewed}</strong> 句
+            {t('本次已温习 {count} 句', 'Reviewed this session: {count}', { count: reviewed })}
           </span>
         }
       />
@@ -94,9 +96,9 @@ export function ReviewPage({
         <div className="review-layout">
           <div className="review-main">
             <div className="review-progress">
-              <span>现在，专心这一句</span>
+              <span>{t("现在，专心这一句", "Focus on this sentence")}</span>
               <span>
-                剩余 <strong>{queue.length}</strong> 句
+                {t('剩余 {count} 句', '{count} remaining', { count: queue.length })}
               </span>
             </div>
             <div className="review-progress-track">
@@ -109,7 +111,7 @@ export function ReviewPage({
                 <span className="tag">
                   {prompts[current.mode].label}
                 </span>
-                <span className="eyebrow">ACTIVE RECALL</span>
+                <span className="eyebrow">{t("主动回想", "ACTIVE RECALL")}</span>
               </div>
               <div className="recall-sentence">
                 <span className="quote-mark">“</span>
@@ -135,7 +137,7 @@ export function ReviewPage({
                   </p>
                   <button className="button primary" onClick={() => setRevealed(true)}>
                     <Eye size={17} />
-                    看看答案<kbd>Space</kbd>
+                    {t("看看答案", "Reveal answer")}<kbd>Space</kbd>
                   </button>
                 </div>
               )}
@@ -143,15 +145,15 @@ export function ReviewPage({
             {revealed && (
               <div className="rating-panel">
                 <div>
-                  <strong>刚才，你回想得怎么样？</strong>
-                  <span>如实选择，比答对更有帮助。</span>
+                  <strong>{t("刚才，你回想得怎么样？", "How well did you remember?")}</strong>
+                  <span>{t("如实选择，比答对更有帮助。", "An honest rating helps more than a perfect answer.")}</span>
                 </div>
                 <div className="rating-grid">
                   {[
-                    { id: 'again', title: '还没记住', hint: '再巩固一下', color: 'again' },
-                    { id: 'hard', title: '有些费力', hint: '需要多练习', color: 'hard' },
-                    { id: 'good', title: '记得不错', hint: '基本掌握了', color: 'good' },
-                    { id: 'easy', title: '轻松想起', hint: '已经很熟悉', color: 'easy' },
+                    { id: 'again', title: t("还没记住", "Again"), hint: t("再巩固一下", "Needs another look"), color: 'again' },
+                    { id: 'hard', title: t("有些费力", "Hard"), hint: t("需要多练习", "More practice needed"), color: 'hard' },
+                    { id: 'good', title: t("记得不错", "Good"), hint: t("基本掌握了", "Mostly remembered"), color: 'good' },
+                    { id: 'easy', title: t("轻松想起", "Easy"), hint: t("已经很熟悉", "Very familiar"), color: 'easy' },
                   ].map((rating, index) => (
                     <button
                       key={rating.id}
@@ -173,21 +175,21 @@ export function ReviewPage({
               <Sprout size={69} strokeWidth={1} />
               <div className="illustration-ground" />
             </div>
-            <span className="eyebrow">LET IT TAKE ROOT</span>
+            <span className="eyebrow">{t("让知识扎根", "LET IT TAKE ROOT")}</span>
             <h2>
-              学过，
+              {t("学过，", "Learn it,")}
               <br />
-              也要记得。
+              {t("也要记得。", "then remember it.")}
             </h2>
-            <p>比起重复阅读，主动回想更能帮助你理解和记住表达。</p>
+            <p>{t("比起重复阅读，主动回想更能帮助你理解和记住表达。", "Active recall helps you understand and remember expressions more than rereading alone.")}</p>
             <div className="review-tip">
-              <span>一个小建议</span>
-              <p>看完修改后，再用同一个语法规则，造一个关于自己的句子。</p>
+              <span>{t("一个小建议", "A small tip")}</span>
+              <p>{t("看完修改后，再用同一个语法规则，造一个关于自己的句子。", "After reading a correction, use the same grammar rule in a sentence about yourself.")}</p>
             </div>
             <small>
-              复习时间会根据你的反馈调整。
+              {t("复习时间会根据你的反馈调整。", "Your feedback adjusts your review schedule.")}
               <br />
-              今天的每一点练习，都算数。
+              {t("今天的每一点练习，都算数。", "Every bit of practice counts.")}
             </small>
           </aside>
         </div>
@@ -197,28 +199,28 @@ export function ReviewPage({
             icon={reviewed ? <Check size={35} /> : <BookOpenCheck size={35} strokeWidth={1.4} />}
             title={
               reviewed
-                ? '今天的积累，又扎实了一点。'
+                ? t("今天的积累，又扎实了一点。", "Your learning is a little stronger today.")
                 : entries.length
-                  ? '此刻，没有等待复习的句子。'
-                  : '先积累，再温习。'
+                  ? t("此刻，没有等待复习的句子。", "No sentences are due right now.")
+                  : t("先积累，再温习。", "Collect first, then review.")
             }
             description={
               reviewed
-                ? `本次温习了 ${reviewed} 句表达。下一次复习时间，已经根据你的反馈安排好了。`
+                ? t('本次温习了 {count} 句表达。下一次复习时间，已经根据你的反馈安排好了。', 'You reviewed {count} sentences. Your next reviews are scheduled based on your ratings.', { count: reviewed })
                 : entries.length
                   ? upcoming
-                    ? `下一次复习：${new Date(upcoming.review.dueAt).toLocaleString('zh-CN', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}。现在可以去积累一些新的表达。`
-                    : '新的笔记会自动加入复习计划。'
-                  : '你的语法纠错和翻译笔记，会自动进入复习计划。从一句你真正想说的话开始。'
+                    ? t('下一次复习：{date}。现在可以去积累一些新的表达。', 'Next review: {date}. You can learn some new expressions in the meantime.', { date: new Date(upcoming.review.dueAt).toLocaleString(language, { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) })
+                    : t("新的笔记会自动加入复习计划。", "New notes are automatically added to your review schedule.")
+                  : t("你的语法纠错和翻译笔记，会自动进入复习计划。从一句你真正想说的话开始。", "Your learning notes automatically enter the review schedule. Start with something you really want to say.")
             }
             action={
               <button className="button primary" onClick={onPractice}>
-                再学一句
+                {t("再学一句", "Practice another sentence")}
                 <ArrowRight size={16} />
               </button>
             }
           />
-          <span className="review-complete-footer">Slowly, steadily, naturally.</span>
+          <span className="review-complete-footer">{t("慢慢积累，自然掌握。", "Slowly, steadily, naturally.")}</span>
         </div>
       )}
     </>

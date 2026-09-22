@@ -16,6 +16,7 @@ import {
 } from '../shared/appearance';
 import type { AppearanceSettings } from '../shared/types';
 import { api, errorMessage } from './bridge';
+import { useI18n } from './i18n';
 
 function cachedAppearance(): AppearanceSettings {
   try {
@@ -52,6 +53,7 @@ const AppearanceContext = createContext<{
 }>({ appearance: DEFAULT_APPEARANCE, saving: false, error: '', update: async () => {} });
 
 export function AppearanceProvider({ children }: PropsWithChildren) {
+  const { language, t } = useI18n();
   const [appearance, setAppearance] = useState(cachedAppearance);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -83,7 +85,7 @@ export function AppearanceProvider({ children }: PropsWithChildren) {
         }
       } catch (e) {
         if (!disposed && read === readSequence && expected === revision.current && !pending.current)
-          setError('读取外观设置失败：' + errorMessage(e));
+          setError(t('读取外观设置失败：{error}', 'Could not load appearance settings: {error}', { error: errorMessage(e) }));
       }
     };
     void refresh();
@@ -101,7 +103,7 @@ export function AppearanceProvider({ children }: PropsWithChildren) {
       media.removeEventListener('change', updateSystem);
       window.removeEventListener('storage', onStorage);
     };
-  }, [apply]);
+  }, [apply, language]);
   const update = useCallback(
     async (patch: Partial<AppearanceSettings>) => {
       const value = normalizeAppearance({ ...current.current, ...patch });
@@ -115,7 +117,7 @@ export function AppearanceProvider({ children }: PropsWithChildren) {
         if (expected === revision.current) apply(normalizeAppearance(saved));
       } catch (e) {
         if (expected === revision.current) {
-          setError('外观未能保存：' + errorMessage(e));
+          setError(t('外观未能保存：{error}', 'Could not save appearance: {error}', { error: errorMessage(e) }));
           try {
             const saved = await api.getAppearance();
             if (expected === revision.current) apply(normalizeAppearance(saved));
@@ -128,7 +130,7 @@ export function AppearanceProvider({ children }: PropsWithChildren) {
         if (expected === revision.current) setSaving(false);
       }
     },
-    [apply],
+    [apply, language],
   );
   return (
     <AppearanceContext.Provider value={{ appearance, saving, error, update }}>

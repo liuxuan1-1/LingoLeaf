@@ -23,6 +23,8 @@ import { NativeService, type NativeCapture } from './native';
 import { MobileServer } from './mobile';
 import type { Analysis, Mode, ResultEvent, Settings } from '../shared/types';
 import { DEFAULT_APPEARANCE, resolveTheme, WINDOW_BACKGROUNDS } from '../shared/appearance';
+import { createTranslator } from '../shared/i18n';
+import { localizeMessage } from '../shared/messages';
 
 let main: BrowserWindow | undefined, popup: BrowserWindow | undefined, tray: Tray | undefined;
 let store: LibraryStore, native: NativeService, mobile: MobileServer;
@@ -31,6 +33,23 @@ let quitting = false,
   latestResult: ResultEvent | undefined;
 let pending: { capture: NativeCapture; result: Analysis; at: number } | undefined;
 let shortcuts = { grammar: false, translate: false };
+const language = () => store?.getUiLanguage() ?? 'zh-CN';
+const statusText = (value: string) => localizeMessage(value, language());
+function syncUiLanguage() {
+  const t = createTranslator(language());
+  main?.setTitle('LingoLeaf');
+  popup?.setTitle(t('LingoLeaf · 划词助手', 'LingoLeaf · Selection assistant'));
+  tray?.setToolTip(t('LingoLeaf · 选中一句话，开始学习', 'LingoLeaf · Select a sentence to learn'));
+  tray?.setContextMenu(Menu.buildFromTemplate([
+    { label: t('打开 LingoLeaf', 'Open LingoLeaf'), click: showMain },
+    { type: 'separator' },
+    { label: t('退出', 'Quit'), click: () => { quitting = true; app.quit(); } },
+  ]));
+  if (latestResult && popup && !popup.isDestroyed()) popup.webContents.send('result', localizedResult(latestResult));
+}
+function localizedResult(result: ResultEvent | undefined) {
+  return result ? { ...result, message: result.message ? statusText(result.message) : undefined } : undefined;
+}
 const textInput = z
   .string()
   .min(1, '请先选中或输入一句话。')
@@ -75,7 +94,7 @@ function syncNativeTheme() {
 }
 function publish(result: ResultEvent) {
   latestResult = result;
-  if (popup && !popup.isDestroyed()) popup.webContents.send('result', result);
+  if (popup && !popup.isDestroyed()) popup.webContents.send('result', localizedResult(result));
 }
 function secureWindow(w: BrowserWindow) {
   w.on('page-title-updated', (event) => event.preventDefault());
@@ -100,7 +119,7 @@ function showMain() {
       frame: false,
       backgroundColor: windowBackground(),
       show: false,
-      title: 'LingoLeaf · 语叶',
+      title: 'LingoLeaf',
       webPreferences: {
         preload: path.join(__dirname, 'preload.cjs'),
         contextIsolation: true,
@@ -135,7 +154,7 @@ function showPopup(activate = true) {
       skipTaskbar: true,
       show: false,
       backgroundColor: windowBackground(),
-      title: 'LingoLeaf · 划词助手',
+      title: createTranslator(language())('LingoLeaf · 划词助手', 'LingoLeaf · Selection assistant'),
       webPreferences: {
         preload: path.join(__dirname, 'preload.cjs'),
         contextIsolation: true,
@@ -261,12 +280,19 @@ function handle(channel: string, handler: (...args: any[]) => unknown) {
     try {
       return await handler(...args);
     } catch (error) {
-      throw new Error(errorText(error));
+      throw new Error(statusText(errorText(error)));
     }
   });
 }
 function setupIPC() {
   const tutor = new TutorService(store);
+  handle('language:get', () => store.getUiLanguage());
+  handle('language:save', async (value: unknown) => {
+    const saved = await store.saveUiLanguage(z.enum(['zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'es']).parse(value));
+    syncUiLanguage();
+    broadcast();
+    return saved;
+  });
   handle('appearance:get', () => store.getAppearance());
   handle('appearance:save', async (value: unknown) => {
     const appearance = z
@@ -286,9 +312,9 @@ function setupIPC() {
     entries: store.list(),
     shortcuts,
     version: app.getVersion(),
-    syncError: store.getSyncError(),
+    syncError: store.getSyncError() ? statusText(store.getSyncError()!) : null,
   }));
-  handle('result:get', () => latestResult);
+  handle('result:get', () => localizedResult(latestResult));
   handle('analyze', async (value: unknown) => {
     const request = z.object({
       text: textInput,
@@ -306,7 +332,7 @@ function setupIPC() {
   handle('tutor:ask', async (value: unknown) => {
     const response = await tutor.ask(value);
     if (response.entry) broadcast();
-    return response;
+    return { ...response, syncError: response.syncError ? statusText(response.syncError) : response.syncError };
   });
   handle('settings:save', async (value: unknown) => {
     const settings = settingsInput.parse(value),
@@ -339,12 +365,12 @@ function setupIPC() {
       credentialScope(settings) === credentialScope(old)
     )
       settings.apiKey = old.apiKey;
-    return testProvider(settings);
+    return testProvider(settings).then(statusText);
   });
   handle('library:choose', async () => {
     const result = await dialog.showOpenDialog(main!, {
       properties: ['openDirectory', 'createDirectory'],
-      title: '选择学习库目录（可以是 Obsidian 或云盘文件夹）',
+      title: createTranslator(language())('选择学习库目录（可以是 Obsidian 或云盘文件夹）', 'Choose a learning notes folder (an Obsidian vault or synced folder is supported)'),
     });
     return result.canceled ? null : result.filePaths[0];
   });
@@ -367,9 +393,9 @@ function setupIPC() {
     clipboard.writeText(z.string().max(30000).parse(text));
   });
   handle('selection:replace', async () => {
-    if (capturing) return { ok: false, message: '正在处理上一个选区，请稍候。' };
+    if (capturing) return { ok: false, message: statusText('正在处理上一个选区，请稍候。') };
     if (!pending || Date.now() - pending.at > 120_000)
-      return { ok: false, message: '选区已过期，请重新选中文字并按快捷键。' };
+      return { ok: false, message: statusText('选区已过期，请重新选中文字并按快捷键。') };
     capturing = true;
     const saved = pending;
     pending = undefined;
@@ -383,12 +409,12 @@ function setupIPC() {
           replaced: outcome.ok,
           message: outcome.message,
         });
-      return outcome;
+      return { ...outcome, message: statusText(outcome.message) };
     } catch (error) {
       const outcome = { ok: false, message: errorText(error) };
       if (latestResult?.status === 'done')
         publish({ ...latestResult, canReplace: false, replaced: false, message: outcome.message });
-      return outcome;
+      return { ...outcome, message: statusText(outcome.message) };
     } finally {
       capturing = false;
       showPopup(true);
@@ -468,25 +494,12 @@ else {
           : path.join(app.getAppPath(), 'assets/icon.png'),
       );
       tray = new Tray(icon);
-      tray.setToolTip('LingoLeaf · 选中一句话，开始学习');
-      tray.setContextMenu(
-        Menu.buildFromTemplate([
-          { label: '打开 LingoLeaf', click: showMain },
-          { type: 'separator' },
-          {
-            label: '退出',
-            click: () => {
-              quitting = true;
-              app.quit();
-            },
-          },
-        ]),
-      );
+      syncUiLanguage();
       tray.on('double-click', showMain);
       if (!process.argv.includes('--hidden')) showMain();
     })
     .catch((error) => {
-      dialog.showErrorBox('LingoLeaf 启动失败', errorText(error));
+      dialog.showErrorBox(createTranslator(language())('LingoLeaf 启动失败', 'LingoLeaf could not start'), statusText(errorText(error)));
       app.quit();
     });
   app.on('window-all-closed', () => {

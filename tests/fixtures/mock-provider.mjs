@@ -25,7 +25,14 @@ const server = createServer(async (req, res) => {
         : incorrect
           ? text.replace(/\bShe go\b/, 'She goes')
           : text,
-      ...(!translating ? { translation: '她去上学。此译文来自本地测试服务。' } : {}),
+      ...(!translating ? {
+        translation: '她去上学。此译文来自本地测试服务。',
+        professional: {
+          text: text.replace(/\bShe go(?:es)? to school\b/, 'She attends school'),
+          explanation: '用自然、简洁的正式表达。此结果来自本地测试服务。',
+          improvements: ['attend school 是描述上学的正式表达。'],
+        },
+      } : {}),
       isCorrect: !incorrect,
       explanation: translating
         ? '“How is the weather” 用来询问天气。此结果来自本地测试服务。'

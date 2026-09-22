@@ -26,6 +26,11 @@ let captured: {
 const good = {
   corrected: 'She goes to school every day.',
   translation: '她每天都去上学。',
+  professional: {
+    text: 'She attends school every day.',
+    explanation: 'attends school 是适合正式语境的自然表达。',
+    improvements: ['用 attend 描述出席或上学，语气更正式。'],
+  },
   isCorrect: true,
   explanation: '主谓一致正确。',
   issues: [],
@@ -124,6 +129,7 @@ describe('provider HTTP adapters', () => {
     expect(captured[0].url).toBe('/v1/chat/completions');
     expect(captured[0].headers.authorization).toBe('Bearer fake-secret-test-key');
     expect(captured[0].body.response_format).toEqual({ type: 'json_object' });
+    expect(captured[0].body.max_completion_tokens).toBe(8192);
     expect(captured[0].body.messages[0].content).toContain('optional stylistic');
     expect(JSON.parse(captured[0].body.messages[1].content)).toEqual({
       text: 'She go to school every day.',
@@ -135,7 +141,7 @@ describe('provider HTTP adapters', () => {
     expect(captured[0].url).toBe('/v1/messages');
     expect(captured[0].headers['x-api-key']).toBe('fake-secret-test-key');
     expect(captured[0].headers['anthropic-version']).toBe('2023-06-01');
-    expect(captured[0].body.max_tokens).toBeGreaterThan(0);
+    expect(captured[0].body.max_tokens).toBe(8192);
     expect(captured[0].body.messages).toHaveLength(1);
     expect(captured[0].body.system).toContain('language teacher');
   });
@@ -150,6 +156,7 @@ describe('provider HTTP adapters', () => {
       '/openai/deployments/my%20deployment/chat/completions?api-version=2024-10-21',
     );
     expect(captured[0].headers['api-key']).toBe('fake-secret-test-key');
+    expect(captured[0].body.max_completion_tokens).toBe(8192);
     expect(captured[0].headers.authorization).toBeUndefined();
   });
   it('uses native Ollama chat without requiring an API key', async () => {
@@ -161,6 +168,7 @@ describe('provider HTTP adapters', () => {
     });
     expect(captured[0].url).toBe('/api/chat');
     expect(captured[0].body.format).toBe('json');
+    expect(captured[0].body.options.num_predict).toBe(8192);
     expect(captured[0].body.stream).toBe(false);
     expect(captured[0].headers.authorization).toBeUndefined();
   });
@@ -172,10 +180,12 @@ describe('provider HTTP adapters', () => {
     });
     expect(captured[0].url).toBe('/custom/chat/completions');
     expect(captured[0].body.response_format).toBeUndefined();
+    expect(captured[0].body.max_completion_tokens).toBeUndefined();
+    expect(captured[0].body.max_tokens).toBeUndefined();
     expect(captured[0].headers.authorization).toBeUndefined();
   });
   it('translates the selected question instead of answering and retains source identity', async () => {
-    const { translation: _translation, ...translationOutput } = good;
+    const { translation: _translation, professional: _professional, ...translationOutput } = good;
     payload = envelope({
       ...translationOutput,
       corrected: "What's the weather like today?",
@@ -232,7 +242,8 @@ describe('provider HTTP adapters', () => {
     expect(captured[0].body.messages[0].content).not.toContain('Deutsch');
   });
   it('does not retain an unsolicited second translation in translation mode', async () => {
-    payload = envelope(good);
+    const { professional: _professional, ...translationOutput } = good;
+    payload = envelope(translationOutput);
     const result = await analyzeText('她每天都去上学。', 'translate', config());
     expect(result.corrected).toBe(good.corrected);
     expect(result).not.toHaveProperty('translation');
@@ -247,6 +258,41 @@ describe('provider HTTP adapters', () => {
 });
 
 describe('provider validation and safe errors', () => {
+  it('keeps formal wording separate from correction and preserves the grammar verdict', async () => {
+    payload = envelope({ ...good, corrected: good.professional.text });
+    const result = await analyzeText(good.corrected, 'grammar', { ...config(), explanationLanguage: '日本語' });
+    expect(result.corrected).toBe(good.corrected);
+    expect(result.isCorrect).toBe(true);
+    expect(result.professional).toEqual(good.professional);
+    expect(captured).toHaveLength(1);
+    const prompt = captured[0].body.messages[0].content;
+    expect(prompt).toContain('Professional wording must never affect isCorrect');
+    expect(prompt).toContain('Never invent promises, job titles');
+    expect(prompt).toContain('Do not turn a possibility into a commitment');
+    expect(prompt).toContain('"日本語"');
+  });
+  it.each([
+    undefined, null, {}, 'formal sentence',
+    { ...good.professional, text: ' \n\t' },
+    { ...good.professional, text: 'x'.repeat(24001) },
+    { ...good.professional, explanation: '' },
+    { ...good.professional, explanation: 'x'.repeat(8001) },
+    { ...good.professional, improvements: [] },
+    { ...good.professional, improvements: [' '] },
+    { ...good.professional, improvements: ['x'.repeat(2001)] },
+    { ...good.professional, improvements: Array(9).fill('tip') },
+    { ...good.professional, extra: 'unexpected field' },
+  ])('rejects incomplete or oversized formal wording with no second model call %#', async (professional) => {
+    payload = envelope({ ...good, professional });
+    await expect(analyzeText(good.corrected, 'grammar', config())).rejects.toThrow('格式');
+    expect(captured).toHaveLength(1);
+  });
+  it('accepts an already-professional sentence without forcing another rewrite', async () => {
+    payload = envelope({ ...good, professional: { ...good.professional, text: good.corrected } });
+    const result = await analyzeText(good.corrected, 'grammar', config());
+    expect(result.professional?.text).toBe(result.corrected);
+    expect(result.isCorrect).toBe(true);
+  });
   it.each([undefined, '', ' \r\n\t', null, 42])(
     'rejects missing or blank grammar translations without making another model request %#',
     async (translation) => {
@@ -372,7 +418,7 @@ describe('Responses protocol routing', () => {
     expect(request.body).toMatchObject({
       stream: true,
       store: false,
-      max_output_tokens: 4096,
+      max_output_tokens: 8192,
       text: { format: { type: 'json_object' } },
     });
     expect(request.body.messages).toBeUndefined();

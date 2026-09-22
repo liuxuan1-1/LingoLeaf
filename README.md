@@ -6,9 +6,13 @@
 
 An English-learning companion for Windows. Select a sentence, check its grammar or translate it with a keyboard shortcut, and turn everyday expressions into your own learning library.
 
+![LingoLeaf workspace with three clear learning tasks](docs/images/workspace-en.jpg)
+
+*Screenshots use demonstration text. No personal records or credentials are shown.*
+
 ## Everyday use
 
-1. Open Preferences (偏好设置), choose OpenAI, an OpenAI-compatible service, Anthropic, Azure OpenAI, or Ollama, and enter your endpoint, model, and API key. Test the connection and save.
+1. Open Settings (偏好设置), choose OpenAI, an OpenAI-compatible service, Anthropic, Azure OpenAI, or Ollama, and enter your endpoint, model, and API key. Test the connection and save.
 2. Select text in another application and press **Ctrl + Shift + G**. A popup shows whether the sentence is grammatically correct, highlights specific errors, and explains the rules with new examples. It also translates the corrected text into your configured explanation language, with a separate copy button for that translation. Style suggestions are labeled separately from grammar errors.
 3. Press **Ctrl + Shift + T** to translate the selected text into your configured target language. By default, LingoLeaf replaces the selection when it can verify an editable text range. If the original window or selection has changed, replacement is canceled and you can copy the translation from the result. Both shortcuts are customizable.
 4. Search your sentences in the Learning Library. In Review, recall the answer before revealing it, then rate how well you remembered it to schedule your next review.
@@ -18,16 +22,21 @@ Closing the window minimizes the app to the system tray. Right-click the tray ic
 
 ## Reading, expressing ideas, and follow-up questions
 
-The practice page has four modes:
+The practice page has three task cards, with a clear selected border and checkmark:
 
 | Mode | What to enter | What you get |
 | --- | --- | --- |
-| Grammar check (语法纠错) | An English sentence | Minimal corrections, explanations, and a translation into your explanation language |
-| Translate (翻译表达) | A sentence in any language | A translation into your configured target language |
-| Reading analysis (阅读解析) | Text in your target language, such as English | A full translation into your explanation language, grammar structure notes anchored to the original text, and a short summary of learning points |
-| Help me express it (帮我表达) | Rough ideas, keywords, or mixed-language notes; optionally a situation and tone | A recommended expression in your target language, two or three alternatives with tone differences, and questions when the meaning needs clarification |
+| Improve English (修改英文) | An English sentence | Minimal grammar corrections, a meaning translation, and a separate professional/formal version with explanations and reusable writing tips |
+| Understand a text (读懂外语) | Text in your target language, such as English | A full translation into your explanation language, source-anchored grammar notes, and key points |
+| Express an idea (表达想法) | A complete source text or rough ideas | Choose **Translate a text** for a faithful translation, or **Shape an idea** for suggested wording, alternatives, context/tone controls, and clarification questions |
 
-For English-to-Chinese reading, set Target language to **English** and Explanation language to **简体中文**, then select **阅读解析** on the practice page. The existing global shortcuts keep their grammar-check and forward-translation behavior.
+Translation and idea shaping share one page. Each input mode retains its own draft and result while you switch tasks. The existing global shortcuts still check grammar or translate a complete selection.
+
+For English-to-Chinese reading, set Translation target language to **English** and Explanation language to **简体中文**, then select **Understand a text**.
+
+Professional wording is an optional style improvement, even for grammatically correct input. It has its own copy button and explains what makes the wording more suitable for work or formal communication. The grammar verdict and minimal correction stay separate; applying a grammar correction uses that correction, not the professional version. Existing notes remain readable; analyze again to add a professional version to a new note.
+
+![A separate professional rewrite with explanations and writing tips](docs/images/professional-en-dark.jpg)
 
 Use the follow-up panel on a result, library note, review answer, or selection popup to ask about an explanation or refine an expression. The model receives that result, your question, and recent conversation turns using the same configured provider. Each result supports up to 20 question-and-answer turns. Long histories remain saved; only recent complete turns within a 48,000-character history budget are sent to the model.
 
@@ -35,7 +44,7 @@ Follow-ups on saved learning entries are stored in the desktop library and separ
 
 ## Download and development
 
-Current version: **v0.3.0 preview**. Download the portable Windows x64 executable from [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases), then configure your own model service after launching it.
+Current version: **v0.4.0 preview**. Download the portable Windows x64 executable from [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases), then configure your own model service after launching it. Exit an older running version from its tray menu before opening the new executable.
 
 [![Windows checks](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml)
 
@@ -58,7 +67,13 @@ The Windows executable is generated in `release/`. Builds currently do not inclu
 
 ## Appearance and readability
 
-At the top of Preferences (偏好设置), open Appearance and Reading (外观与阅读) to choose **Forest Cream (松林米白), Sky Blue (晴空蓝白), Lavender (雾紫), or Midnight Dark (午夜深色)**, or follow the Windows light/dark setting. Themes apply to the main interface, forms, learning cards, in-app dialogs, and selection result popups.
+Under **Settings → Interface language**, choose **简体中文, 繁體中文, English, 日本語, 한국어, or Español**. The choice applies immediately and saves independently, including open result popups. It does not submit unsaved model settings or change your translation/explanation languages. The mobile learning page follows the desktop interface language when reloaded. Saved sentences, explanations, tags, and personal notes keep their original language.
+
+![Six interface languages in the desktop settings](docs/images/interface-languages.jpg)
+
+Under Appearance and Reading (外观与阅读), choose **Forest Cream (松林米白), Sky Blue (晴空蓝白), Lavender (雾紫), or Midnight Dark (午夜深色)**, or follow the Windows light/dark setting. Themes apply to the main interface, forms, learning cards, in-app dialogs, and selection result popups.
+
+![Spanish interface in dark mode with translation and idea shaping on one page](docs/images/expression-es-dark.jpg)
 
 Text sizes are **Standard / Large / Extra Large**, with body text baselines of 16 / 18 / 20px. Large is the default. Descriptions, labels, and buttons use their own readable sizes. Smaller windows reflow and scroll to keep actions accessible when text is enlarged.
 
@@ -89,7 +104,7 @@ Protocol references: [Chat Completions API](https://developers.openai.com/api/re
 
 ## Learning library and mobile access
 
-Under Preferences → Learning notes folder, choose an existing Obsidian vault or a synced folder such as OneDrive. The app creates:
+Under Settings → Learning notes folder, choose an existing Obsidian vault or a synced folder such as OneDrive. The app creates:
 
 ```text
 selected-folder/

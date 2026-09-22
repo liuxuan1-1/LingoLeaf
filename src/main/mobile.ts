@@ -2,10 +2,12 @@ import { createServer, type Server, type IncomingMessage, type ServerResponse } 
 import { networkInterfaces } from 'node:os';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import QRCode from 'qrcode';
-import type { Entry, MobileStatus, Rating } from '../shared/types';
-import { MOBILE_HTML } from './mobile-page';
+import type { Entry, MobileStatus, Rating, UiLanguage } from '../shared/types';
+import { renderMobilePage } from './mobile-page';
+import { translate } from '../shared/i18n';
 
 interface MobileStore {
+  getUiLanguage?(): UiLanguage;
   list(): Entry[];
   rate(id: string, rating: Rating): Promise<Entry>;
 }
@@ -25,6 +27,9 @@ export class MobileServer {
     private store: MobileStore,
     private changed: () => void = () => {},
   ) {}
+  private t(chinese: string, english: string): string {
+    return translate(this.store.getUiLanguage?.() ?? 'zh-CN', chinese, english);
+  }
   status(): MobileStatus {
     return { ...this.statusValue, urls: [...this.statusValue.urls] };
   }
@@ -35,7 +40,7 @@ export class MobileServer {
       const server = createServer((req, res) => {
         void this.handle(req, res).catch(() => {
           if (res.destroyed || res.writableEnded) return;
-          if (!res.headersSent) this.json(res, 500, { error: '暂时无法读取学习库，请稍后重试。' });
+          if (!res.headersSent) this.json(res, 500, { error: this.t("暂时无法读取学习库，请稍后重试。", "The learning library is temporarily unavailable. Please try again.") });
           else res.end();
         });
       });
@@ -52,7 +57,7 @@ export class MobileServer {
           });
         });
         const address = server.address();
-        if (!address || typeof address === 'string') throw new Error('手机连接启动失败。');
+        if (!address || typeof address === 'string') throw new Error(this.t("手机连接启动失败。", "Could not start mobile sync."));
         const addresses = !['0.0.0.0', '::'].includes(host)
           ? [host]
           : Object.values(networkInterfaces())
@@ -127,7 +132,7 @@ export class MobileServer {
     const route = (req.url ?? '/').split('?')[0];
     if (req.method === 'GET' && route === '/') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(MOBILE_HTML);
+      res.end(renderMobilePage(this.store.getUiLanguage?.() ?? 'zh-CN'));
       return;
     }
     const supplied = Buffer.from((req.headers.authorization ?? '').replace(/^Bearer /, ''));
@@ -137,11 +142,11 @@ export class MobileServer {
       supplied.length !== expected.length ||
       !timingSafeEqual(supplied, expected)
     ) {
-      this.json(res, 401, { error: '连接已失效，请重新扫描桌面的二维码。' });
+      this.json(res, 401, { error: this.t("连接已失效，请重新扫描桌面的二维码。", "This connection has expired. Scan the desktop QR code again.") });
       return;
     }
     if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) {
-      this.json(res, 403, { error: '不允许跨站请求。' });
+      this.json(res, 403, { error: this.t("不允许跨站请求。", "Cross-site requests are not allowed.") });
       return;
     }
     if (req.method === 'GET' && route === '/api/entries') {
@@ -153,11 +158,11 @@ export class MobileServer {
         (req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase() !==
         'application/json'
       ) {
-        this.rejectBody(req, res, 415, '需要 JSON 请求。');
+        this.rejectBody(req, res, 415, this.t("需要 JSON 请求。", "A JSON request is required."));
         return;
       }
       if (Number(req.headers['content-length'] ?? 0) > 4096) {
-        this.rejectBody(req, res, 413, '请求过大。');
+        this.rejectBody(req, res, 413, this.t("请求过大。", "The request is too large."));
         return;
       }
       const chunks: Buffer[] = [];
@@ -166,7 +171,7 @@ export class MobileServer {
       for await (const chunk of req.iterator({ destroyOnReturn: false })) {
         bytes += chunk.length;
         if (bytes > 4096) {
-          this.rejectBody(req, res, 413, '请求过大。');
+          this.rejectBody(req, res, 413, this.t("请求过大。", "The request is too large."));
           return;
         }
         chunks.push(Buffer.from(chunk));
@@ -175,7 +180,7 @@ export class MobileServer {
       try {
         value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
       } catch {
-        this.json(res, 400, { error: '请求格式错误。' });
+        this.json(res, 400, { error: this.t("请求格式错误。", "The request format is invalid.") });
         return;
       }
       if (
@@ -186,11 +191,11 @@ export class MobileServer {
         typeof value.rating !== 'string' ||
         !['again', 'hard', 'good', 'easy'].includes(value.rating)
       ) {
-        this.json(res, 400, { error: '复习信息无效。' });
+        this.json(res, 400, { error: this.t("复习信息无效。", "The review information is invalid.") });
         return;
       }
       if (!this.store.list().some((entry) => entry.id === value.id)) {
-        this.json(res, 404, { error: '这条记录已不存在，请刷新。' });
+        this.json(res, 404, { error: this.t("这条记录已不存在，请刷新。", "This entry no longer exists. Please refresh.") });
         return;
       }
       let entry: Entry;
@@ -198,8 +203,8 @@ export class MobileServer {
         entry = await this.store.rate(value.id, value.rating as Rating);
       } catch {
         if (!this.store.list().some((item) => item.id === value.id))
-          this.json(res, 404, { error: '这条记录已不存在，请刷新。' });
-        else this.json(res, 500, { error: '复习进度未能保存，请检查桌面学习库后重试。' });
+          this.json(res, 404, { error: this.t("这条记录已不存在，请刷新。", "This entry no longer exists. Please refresh.") });
+        else this.json(res, 500, { error: this.t("复习进度未能保存，请检查桌面学习库后重试。", "Could not save your review progress. Check the desktop library and try again.") });
         return;
       }
       // A notification failure must not turn a successfully committed review into an apparent failure.
@@ -211,6 +216,6 @@ export class MobileServer {
       this.json(res, 200, { entry, now: new Date().toISOString() });
       return;
     }
-    this.json(res, 404, { error: '未找到。' });
+    this.json(res, 404, { error: this.t("未找到。", "Not found.") });
   }
 }

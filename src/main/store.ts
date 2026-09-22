@@ -4,9 +4,10 @@ import path from 'node:path';
 import { z } from 'zod';
 import { analysisSchema, PROVIDER_DEFAULTS } from './providers';
 import { initialReview, scheduleReview } from '../shared/scheduler';
-import type { Analysis, AppearanceSettings, ConversationTurn, Entry, Mode, Rating, Settings } from '../shared/types';
+import type { Analysis, AppearanceSettings, ConversationTurn, Entry, Mode, Rating, Settings, UiLanguage } from '../shared/types';
 
 export const DEFAULT_SETTINGS: Settings = {
+  uiLanguage: 'zh-CN',
   provider: 'openai',
   requestProtocol: 'auto',
   endpoint: PROVIDER_DEFAULTS.openai.endpoint,
@@ -35,6 +36,7 @@ const appearanceSchema = z
 
 const settingsSchema = z
   .object({
+    uiLanguage: z.enum(['zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'es']).default('zh-CN'),
     provider: z.enum(['openai', 'anthropic', 'azure', 'ollama', 'compatible']),
     requestProtocol: z.enum(['auto', 'chat-completions', 'responses']).default('auto'),
     endpoint: z.string().max(2000),
@@ -163,6 +165,10 @@ export function renderEntryMarkdown(entry: Entry): string {
     `## 原句\n\n${literal(entry.original)}\n\n## ${entry.mode === 'grammar' ? '正确表达' : entry.mode === 'express' ? '建议表达' : '译文'}\n\n${literal(entry.corrected)}\n\n` +
     (entry.mode === 'grammar' && entry.translation
       ? `## 译文${entry.translationLanguage ? ` · ${plain(entry.translationLanguage)}` : ''}\n\n${literal(entry.translation)}\n\n`
+      : '') +
+    (entry.mode === 'grammar' && entry.professional
+      ? `## 专业 / 正式表达\n\n${literal(entry.professional.text)}\n\n${quote(entry.professional.explanation)}\n\n` +
+        `### 写作提升要点\n\n${entry.professional.improvements.map((point) => `- ${plain(point).replace(/\r?\n/g, '\n  ')}`).join('\n')}\n\n`
       : '') +
     `## 理解原因\n\n${quote(entry.explanation)}\n\n${entry.mode === 'grammar' ? `## 逐项解析\n\n${issueText}\n\n` : ''}` +
     (entry.grammarPoints?.length ? `## 语法结构\n\n${entry.grammarPoints.map((point, index) => `### ${index + 1}\n\n${literal(point.text)}\n\n${quote(point.explanation)}`).join('\n\n')}\n\n` : '') +
@@ -321,6 +327,19 @@ export class LibraryStore {
       fontSize: this.settings.fontSize ?? 'large',
     };
   }
+  getUiLanguage(): UiLanguage {
+    return this.settings.uiLanguage ?? 'zh-CN';
+  }
+  async saveUiLanguage(value: UiLanguage): Promise<UiLanguage> {
+    return this.serial(async () => {
+      const result = settingsSchema.shape.uiLanguage.removeDefault().safeParse(value);
+      if (!result.success) throw new Error('界面语言无效，请选择支持的语言。');
+      const settings = { ...this.settings, uiLanguage: result.data };
+      await this.persistSettings(settings, this.credentials);
+      this.settings = settings;
+      return this.getUiLanguage();
+    });
+  }
   async saveAppearance(value: AppearanceSettings): Promise<AppearanceSettings> {
     return this.serial(async () => {
       const result = appearanceSchema.safeParse(value);
@@ -345,9 +364,9 @@ export class LibraryStore {
 
   async saveSettings(value: Settings): Promise<Settings> {
     return this.serial(async () => {
-      // Appearance has its own scoped save API. A stale full-settings draft must
-      // not overwrite appearance changes committed while that draft was open.
-      const result = settingsSchema.safeParse({ ...value, ...this.getAppearance() });
+      // Appearance and UI language have scoped save APIs. A stale settings draft
+      // must not overwrite either independently committed preference.
+      const result = settingsSchema.safeParse({ ...value, ...this.getAppearance(), uiLanguage: this.getUiLanguage() });
       if (!result.success) throw new Error('设置格式无效，请检查输入。');
       const { clearApiKey, ...settings } = result.data;
       if (!path.isAbsolute(settings.libraryPath)) throw new Error('请选择一个有效的学习库文件夹。');
@@ -378,6 +397,7 @@ export class LibraryStore {
       const validated = analysisSchema.safeParse(analysis);
       if (!validated.success) throw new Error('学习内容格式无效，未写入学习库。');
       const content = validated.data;
+      if (content.mode !== 'grammar') delete content.professional;
       if (content.mode === 'grammar' && content.translation) {
         content.translationLanguage = settings.explanationLanguage.trim() || '简体中文';
       } else if (content.mode === 'read') {

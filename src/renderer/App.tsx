@@ -1,3 +1,4 @@
+import { useI18n } from './i18n';
 import {
   ArrowDownToLine,
   ArrowRight,
@@ -28,10 +29,12 @@ import { Library } from './Library';
 import { ReviewPage } from './Review';
 import { SettingsPage } from './Settings';
 import { MobilePage } from './Mobile';
-import { MODE_INFO } from './modes';
+import { getModeInfo } from './modes';
 
 export type Page = 'workbench' | 'library' | 'review' | 'mobile' | 'settings';
 export function App() {
+  const { language, t } = useI18n();
+  const modeInfo = getModeInfo(language);
   const [state, setState] = useState<AppState | null>(null);
   const [fatal, setFatal] = useState('');
   const [page, setPage] = useState<Page>('workbench');
@@ -96,7 +99,7 @@ export function App() {
   const exportNotes = async () => {
     try {
       const path = await api.exportLibrary();
-      if (path) notify(`学习笔记已导出至 ${path}`);
+      if (path) notify(t('学习笔记已导出至 {path}', 'Learning notes exported to {path}', { path }));
     } catch (e) {
       notify(errorMessage(e), 'error');
     }
@@ -120,23 +123,23 @@ export function App() {
             <>
               <p className="error-text">{fatal}</p>
               <button className="button primary" onClick={refresh}>
-                重新载入
+                {t("重新载入", "Reload")}
               </button>
             </>
           ) : (
             <p className="loading-inline">
               <LoaderCircle className="spin" size={18} />
-              正在打开你的学习空间…
+              {t("正在打开你的学习空间…", "Opening your learning space…")}
             </p>
           )}
         </div>
       </div>
     );
   const navItems = [
-    { id: 'workbench', icon: Sparkles, label: '句子工作台', hint: 'Practice' },
-    { id: 'library', icon: BookOpen, label: '我的学习库', hint: 'Library' },
-    { id: 'review', icon: Flower2, label: '温故知新', hint: 'Review' },
-    { id: 'mobile', icon: Smartphone, label: '随身学习', hint: 'On the go' },
+    { id: 'workbench', icon: Sparkles, label: t("句子工作台", "Practice"), hint: t('写作与阅读', 'Write and read') },
+    { id: 'library', icon: BookOpen, label: t("我的学习库", "My library"), hint: t('收藏与搜索', 'Collect and search') },
+    { id: 'review', icon: Flower2, label: t("温故知新", "Review"), hint: t('主动回想', 'Active recall') },
+    { id: 'mobile', icon: Smartphone, label: t("随身学习", "On the go"), hint: t('手机与同步', 'Mobile and sync') },
   ] as const;
   const configured =
     Boolean(state.settings.model.trim()) &&
@@ -148,13 +151,13 @@ export function App() {
       <aside className={`sidebar ${menuOpen ? 'is-open' : ''}`}>
         <Brand />
         <div className="sidebar-intro">
-          YOUR WORDS,
+          {t("你的表达，", "YOUR WORDS,")}
           <br />
-          <em>growing.</em>
+          <em>{t("正在成长。", "growing.")}</em>
           <span className="intro-dot" />
         </div>
-        <div className="nav-label">你的学习空间</div>
-        <nav aria-label="主要导航">
+        <div className="nav-label">{t("你的学习空间", "Your learning space")}</div>
+        <nav aria-label={t("主要导航", "Main navigation")}>
           {navItems.map(({ id, icon: Icon, label, hint }) => (
             <button
               key={id}
@@ -176,30 +179,30 @@ export function App() {
           <div className="sidebar-note">
             <Sprout size={22} strokeWidth={1.45} />
             <p>
-              每天一点点，
+              {t("每天一点点，", "A little every day,")}
               <br />
-              让表达成为你的直觉。
+              {t("让表达成为你的直觉。", "until expression feels natural.")}
             </p>
-            <span>ONE SENTENCE AT A TIME</span>
+            <span>{t("一句一句，慢慢进步", "ONE SENTENCE AT A TIME")}</span>
           </div>
           <button
             className={`nav-item settings-nav ${page === 'settings' ? 'active' : ''}`}
             onClick={() => setPage('settings')}
           >
             <Settings2 size={19} strokeWidth={1.6} />
-            <span>偏好设置</span>
+            <span>{t("偏好设置", "Settings")}</span>
             <span className="version">v{state.version}</span>
           </button>
           <div className="local-note">
             <span />
-            本地笔记 · 由你掌握
+            {t("本地笔记 · 由你掌握", "Local notes · Yours to keep")}
           </div>
         </div>
       </aside>
       {menuOpen && (
         <button
           className="sidebar-overlay"
-          aria-label="关闭导航菜单"
+          aria-label={t("关闭导航菜单", "Close navigation menu")}
           onClick={() => setMenuOpen(false)}
         />
       )}
@@ -208,13 +211,13 @@ export function App() {
         <div className="mobile-bar">
           <button
             className="icon-button"
-            aria-label="展开导航"
+            aria-label={t("展开导航", "Open navigation")}
             onClick={() => setMenuOpen((value) => !value)}
           >
             <PanelLeftClose size={21} />
           </button>
           <Brand compact />
-          <button className="icon-button" aria-label="偏好设置" onClick={() => setPage('settings')}>
+          <button className="icon-button" aria-label={t("偏好设置", "Settings")} onClick={() => setPage('settings')}>
             <Settings2 size={20} />
           </button>
         </div>
@@ -222,20 +225,20 @@ export function App() {
           {isPreview && (
             <div className="preview-banner">
               <CircleAlert size={15} />
-              浏览器界面预览 · 模型调用、笔记保存和系统快捷键需要 Windows 桌面应用
+              {t("浏览器界面预览 · 模型调用、笔记保存和系统快捷键需要 Windows 桌面应用", "Browser preview · Model requests, saved notes and global shortcuts require the Windows desktop app")}
             </div>
           )}
           {state.syncError && (
             <div className="sync-warning" role="alert">
               <CircleAlert size={16} />
-              <div>Markdown 文件与应用记录暂未同步：{state.syncError}</div>
+              <div>{t('Markdown 文件与应用记录暂未同步：{error}', 'Markdown files are out of sync with app records: {error}', { error: state.syncError })}</div>
             </div>
           )}
           {fatal && (
             <div className="inline-error" role="alert">
               {fatal}
               <button className="text-button" onClick={refresh}>
-                重试
+                {t("重试", "Retry")}
               </button>
             </div>
           )}
@@ -243,13 +246,13 @@ export function App() {
             {page === 'workbench' && (
               <>
                 <SectionHeading
-                  eyebrow="MAKE YOURSELF UNDERSTOOD"
-                  title="让每句话，长出新知。"
-                  description="纠正一个细节，学会一种表达。把日常，变成你的语言课堂。"
+                  eyebrow={t("让表达更清晰", "MAKE YOURSELF UNDERSTOOD")}
+                  title={t("让每句话，长出新知。", "Grow with every sentence.")}
+                  description={t("纠正一个细节，学会一种表达。把日常，变成你的语言课堂。", "Refine a detail, learn a new expression. Turn everyday writing into practice.")}
                   action={
                     <span className="date-badge">
                       <span />
-                      {new Date().toLocaleDateString('zh-CN', {
+                      {new Date().toLocaleDateString(language, {
                         month: 'long',
                         day: 'numeric',
                         weekday: 'long',
@@ -263,10 +266,10 @@ export function App() {
                       <BookOpen size={20} />
                     </span>
                     <div>
-                      <span>积累的句子</span>
+                      <span>{t("积累的句子", "Saved sentences")}</span>
                       <strong>
                         {state.entries.length}
-                        <small>句</small>
+                        <small>{t("句", "sentences")}</small>
                       </strong>
                     </div>
                     <ArrowUpRight className="stat-arrow" size={17} />
@@ -276,10 +279,10 @@ export function App() {
                       <Clock3 size={20} />
                     </span>
                     <div>
-                      <span>等待温习</span>
+                      <span>{t("等待温习", "Due for review")}</span>
                       <strong>
                         {due.length}
-                        <small>句</small>
+                        <small>{t("句", "sentences")}</small>
                       </strong>
                     </div>
                     <ArrowUpRight className="stat-arrow" size={17} />
@@ -289,13 +292,13 @@ export function App() {
                       <Check size={21} />
                     </span>
                     <div>
-                      <span>今天已复习</span>
+                      <span>{t("今天已复习", "Reviewed today")}</span>
                       <strong>
                         {reviewedToday}
-                        <small>句</small>
+                        <small>{t("句", "sentences")}</small>
                       </strong>
                     </div>
-                    <span className="stat-caption">Every little counts.</span>
+                    <span className="stat-caption">{t("每一点进步都算数。", "Every little counts.")}</span>
                   </div>
                 </div>
                 {!configured && (
@@ -304,11 +307,11 @@ export function App() {
                       <Sparkles size={19} />
                     </span>
                     <span>
-                      <strong>连接你的 AI，开始第一句练习</strong>
-                      <small>支持 OpenAI、Claude、Azure 和本地模型；密钥保存在你的电脑。</small>
+                      <strong>{t("连接你的 AI，开始第一句练习", "Connect your AI and start practicing")}</strong>
+                      <small>{t("支持 OpenAI、Claude、Azure 和本地模型；密钥保存在你的电脑。", "Use OpenAI, Claude, Azure or local models. Your key stays on your computer.")}</small>
                     </span>
                     <span className="setup-link">
-                      设置模型
+                      {t("设置模型", "Set up a model")}
                       <ArrowRight size={16} />
                     </span>
                   </button>
@@ -323,11 +326,11 @@ export function App() {
                 />
                 <div className="section-heading-row">
                   <div>
-                    <span className="eyebrow">GROW YOUR COLLECTION</span>
-                    <h2>最近的积累</h2>
+                    <span className="eyebrow">{t("积累日常表达", "GROW YOUR COLLECTION")}</span>
+                    <h2>{t("最近的积累", "Recent discoveries")}</h2>
                   </div>
                   <button className="text-button" onClick={() => setPage('library')}>
-                    查看学习库
+                    {t("查看学习库", "View library")}
                     <ArrowRight size={15} />
                   </button>
                 </div>
@@ -344,12 +347,12 @@ export function App() {
                         >
                           <div>
                             <span className={`tag ${entry.mode === 'translate' ? 'amber' : ''}`}>
-                              {MODE_INFO[entry.mode].short}
+                              {modeInfo[entry.mode].short}
                             </span>
                             <ArrowUpRight size={16} />
                           </div>
                           <p>{entry.corrected}</p>
-                          <small>{entry.tags.slice(0, 2).join(' · ') || '日常表达'}</small>
+                          <small>{entry.tags.slice(0, 2).join(' · ') || t("日常表达", "Everyday expressions")}</small>
                         </button>
                       ))}
                   </div>
@@ -359,21 +362,21 @@ export function App() {
                       <Sprout size={23} strokeWidth={1.5} />
                     </span>
                     <div>
-                      <strong>你的第一片语叶，从一句话开始</strong>
-                      <p>完成练习后，保存的学习笔记会出现在这里。</p>
+                      <strong>{t("你的第一片语叶，从一句话开始", "Your collection starts with one sentence")}</strong>
+                      <p>{t("完成练习后，保存的学习笔记会出现在这里。", "Your saved learning notes will appear here after practice.")}</p>
                     </div>
                     <span className="decorative-line" />
                   </div>
                 )}
                 <footer className="page-footer">
-                  <span>Small practice. Lasting progress.</span>
+                  <span>{t("点滴练习，长久进步。", "Small practice. Lasting progress.")}</span>
                   <button
                     onClick={() =>
                       void api.openLibrary().catch((e) => notify(errorMessage(e), 'error'))
                     }
                   >
                     <FolderOpen size={14} />
-                    打开笔记文件夹
+                    {t("打开笔记文件夹", "Open notes folder")}
                   </button>
                 </footer>
               </>
@@ -426,7 +429,7 @@ export function App() {
         <div className={`toast ${toast.kind}`} role={toast.kind === 'error' ? 'alert' : 'status'}>
           {toast.kind === 'error' ? <CircleAlert size={19} /> : <Check size={19} />}
           <span>{toast.message}</span>
-          <button className="icon-button" aria-label="关闭提示" onClick={() => setToast(null)}>
+          <button className="icon-button" aria-label={t("关闭提示", "Dismiss notification")} onClick={() => setToast(null)}>
             <X size={16} />
           </button>
         </div>

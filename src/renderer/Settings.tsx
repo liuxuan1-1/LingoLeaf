@@ -1,3 +1,4 @@
+import { useI18n } from './i18n';
 import {
   ArrowRight,
   Check,
@@ -9,6 +10,7 @@ import {
   FolderOpen,
   KeyRound,
   Keyboard,
+  Languages,
   Leaf,
   Link,
   PlugZap,
@@ -16,24 +18,25 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Provider, RequestProtocol, Settings } from '../shared/types';
+import type { Provider, RequestProtocol, Settings, UiLanguage } from '../shared/types';
+import { UI_LANGUAGES, type Translate } from '../shared/i18n';
 import { api, errorMessage } from './bridge';
 import { SectionHeading, Shortcut, Spinner, Toggle, type Notify } from './components';
 import { AppearanceCard } from './AppearanceCard';
 
-const providers: { id: Provider; name: string; detail: string; endpoint: string; model: string }[] =
-  [
+function getProviders(t: Translate): { id: Provider; name: string; detail: string; endpoint: string; model: string }[] {
+  return [
     {
       id: 'openai',
       name: 'OpenAI',
-      detail: 'GPT models',
+      detail: t("GPT 模型", "GPT models"),
       endpoint: 'https://api.openai.com/v1',
       model: 'gpt-4.1-mini',
     },
     {
       id: 'anthropic',
       name: 'Anthropic',
-      detail: 'Claude models',
+      detail: t("Claude 模型", "Claude models"),
       endpoint: 'https://api.anthropic.com',
       model: 'claude-sonnet-4-20250514',
     },
@@ -47,18 +50,19 @@ const providers: { id: Provider; name: string; detail: string; endpoint: string;
     {
       id: 'ollama',
       name: 'Ollama',
-      detail: '本地模型',
+      detail: t("本地模型", "Local models"),
       endpoint: 'http://localhost:11434',
       model: 'qwen2.5:7b',
     },
     {
       id: 'compatible',
-      name: '兼容接口',
-      detail: 'OpenAI compatible',
+      name: t("兼容接口", "Compatible API"),
+      detail: t("兼容 OpenAI", "OpenAI compatible"),
       endpoint: 'http://localhost:1234/v1',
       model: 'local-model',
     },
   ];
+}
 function ShortcutEditor({
   label,
   description,
@@ -72,6 +76,7 @@ function ShortcutEditor({
   registered: boolean;
   onChange: (value: string) => void;
 }) {
+  const { t } = useI18n();
   const [recording, setRecording] = useState(false);
   const [invalid, setInvalid] = useState(false);
   useEffect(() => {
@@ -132,18 +137,18 @@ function ShortcutEditor({
             setRecording((value) => !value);
             setInvalid(false);
           }}
-          aria-label={`设置${label}快捷键`}
+          aria-label={t('设置{label}快捷键', 'Set shortcut for {label}', { label })}
         >
-          {recording ? '按下组合键 · Esc 取消' : <Shortcut value={value} />}
+          {recording ? t("按下组合键 · Esc 取消", "Press a shortcut · Esc to cancel") : <Shortcut value={value} />}
         </button>
         <span className={`shortcut-status ${!registered ? 'warning' : ''}`}>
           {recording
             ? invalid
-              ? '请包含 Ctrl、Alt 或 Win'
-              : '等待按键…'
+              ? t("请包含 Ctrl、Alt 或 Win", "Include Ctrl, Alt or Win")
+              : t("等待按键…", "Waiting for keys…")
             : registered
-              ? '当前已启用 · 点击修改'
-              : '保存后尝试注册快捷键'}
+              ? t("当前已启用 · 点击修改", "Enabled · Click to change")
+              : t("保存后尝试注册快捷键", "The shortcut will be registered when saved")}
         </span>
       </div>
     </div>
@@ -166,6 +171,8 @@ export function SettingsPage({
   onSaved: (settings: Settings) => void;
   refresh: () => Promise<void>;
 }) {
+  const { language, t, saving: savingLanguage, error: languageError, setLanguage } = useI18n();
+  const providers = getProviders(t);
   const [draft, setDraft] = useState<Settings>(initialDraft || { ...settings, apiKey: '' });
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -208,7 +215,7 @@ export function SettingsPage({
       setDirty(false);
       onSaved(saved);
       await refresh();
-      notify('设置已保存，新的快捷键与模型配置已生效。');
+      notify(t("设置已保存，新的快捷键与模型配置已生效。", "Settings saved. Your shortcuts and model configuration are now active."));
     } catch (e) {
       notify(errorMessage(e), 'error');
     } finally {
@@ -230,16 +237,33 @@ export function SettingsPage({
   return (
     <>
       <SectionHeading
-        eyebrow="MAKE IT FEEL LIKE YOURS"
-        title="你的工具，你做主。"
-        description="选择喜欢的模型、熟悉的快捷键，以及自己的笔记存放方式。"
+        eyebrow={t("打造你的学习空间", "MAKE IT FEEL LIKE YOURS")}
+        title={t("你的工具，你做主。", "Make this space yours.")}
+        description={t("选择喜欢的模型、熟悉的快捷键，以及自己的笔记存放方式。", "Choose your model, shortcuts and where to keep your notes.")}
         action={
           <span className="settings-status">
             <span className={dirty ? 'unsaved' : ''} />
-            {dirty ? '有未保存的修改' : '设置已保存'}
+            {dirty ? t("有未保存的修改", "Unsaved changes") : t("设置已保存", "Settings saved")}
           </span>
         }
       />
+      <section className="card settings-card language-card">
+        <div className="settings-card-heading">
+          <span className="settings-heading-icon"><Languages size={23} /></span>
+          <div>
+            <h2>{t('界面语言', 'Interface language')}</h2>
+            <p>{t('选择应用界面的语言。翻译目标语言和讲解语言可在下方单独设置。', 'Choose the app language. Translation and explanation languages are configured separately below.')}</p>
+          </div>
+        </div>
+        <label className="form-field">
+          <span>{t('界面语言', 'Interface language')}</span>
+          <select value={language} onChange={(event) => void setLanguage(event.target.value as UiLanguage)}>
+            {UI_LANGUAGES.map((item) => <option key={item.value} value={item.value} lang={item.value}>{item.label}</option>)}
+          </select>
+          <small role="status">{savingLanguage ? t('正在保存语言…', 'Saving language…') : t('即时生效 · 自动保存', 'Applies instantly · Saves automatically')}</small>
+        </label>
+        {languageError && <div className="inline-error" role="alert"><CircleAlert size={18} /><p>{languageError}</p></div>}
+      </section>
       <AppearanceCard />
       <div className="settings-layout">
         <fieldset className="settings-main" disabled={testing || saving}>
@@ -249,8 +273,8 @@ export function SettingsPage({
                 <Cpu size={21} />
               </span>
               <div>
-                <h2>模型连接</h2>
-                <p>使用你自己的 API，或让模型在本机运行。</p>
+                <h2>{t("模型连接", "Model connection")}</h2>
+                <p>{t("使用你自己的 API，或让模型在本机运行。", "Connect your own API or run a model locally.")}</p>
               </div>
               <span className="settings-step">01</span>
             </div>
@@ -279,7 +303,7 @@ export function SettingsPage({
             <div className="form-grid">
               <label className="form-field full">
                 <span>
-                  接口地址 <small>Endpoint</small>
+                  {t("接口地址", "Endpoint")}
                 </span>
                 <input
                   value={draft.endpoint}
@@ -289,52 +313,50 @@ export function SettingsPage({
                 />
                 <small>
                   {draft.provider === 'azure'
-                    ? '填写 Azure OpenAI 资源地址；部署名称在下方填写。Azure AI 其他兼容端点可选择「兼容接口」。'
+                    ? t("填写 Azure OpenAI 资源地址；部署名称在下方填写。Azure AI 其他兼容端点可选择「兼容接口」。", "Enter your Azure OpenAI resource endpoint and the deployment name below. For other compatible Azure AI endpoints, choose Compatible API.")
                     : draft.provider === 'ollama'
-                      ? '本机 Ollama 通常使用 http://localhost:11434。请先拉取并启动所选模型。'
+                      ? t("本机 Ollama 通常使用 http://localhost:11434。请先拉取并启动所选模型。", "Local Ollama usually uses http://localhost:11434. Download and start your chosen model first.")
                       : draft.provider === 'compatible'
-                        ? '支持 OpenAI Chat Completions 和 Responses 接口，包括 LM Studio、vLLM、Copilot Bridge。'
-                        : '可使用官方接口或你信任的代理地址。'}
+                        ? t("支持 OpenAI Chat Completions 和 Responses 接口。", "Supports OpenAI Chat Completions and Responses APIs.")
+                        : t("可使用官方接口或你信任的代理地址。", "Use the official endpoint or a proxy you trust.")}
                 </small>
               </label>
               {(draft.provider === 'openai' || draft.provider === 'compatible') && (
                 <label className="form-field full">
                   <span>
-                    请求协议 <small>API protocol</small>
+                    {t("请求协议", "API protocol")}
                   </span>
                   <select
                     value={draft.requestProtocol ?? 'auto'}
                     onChange={(e) => field('requestProtocol', e.target.value as RequestProtocol)}
                   >
-                    <option value="auto">自动识别（推荐）</option>
+                    <option value="auto">{t("自动识别（推荐）", "Auto-detect (recommended)")}</option>
                     <option value="chat-completions">Chat Completions</option>
                     <option value="responses">Responses API</option>
                   </select>
                   <small>
-                    Copilot Bridge 的 /codex 地址使用
-                    Responses。自动模式会识别完整接口路径，并在路由不存在时尝试另一种协议。
+                    {t("自动模式会识别完整接口路径，并在路由不存在时尝试另一种协议。", "Auto mode recognizes full endpoint paths and tries the other protocol when a route is unavailable.")}
                   </small>
                 </label>
               )}
               <label className={`form-field ${draft.provider !== 'azure' ? 'full' : ''}`}>
                 <span>
-                  {draft.provider === 'azure' ? '部署名称' : '模型名称'}{' '}
-                  <small>{draft.provider === 'azure' ? 'Deployment' : 'Model'}</small>
+                  {draft.provider === 'azure' ? t("部署名称", "Deployment name") : t("模型名称", "Model name")}{' '}
                 </span>
                 <input
                   value={draft.model}
                   onChange={(e) => field('model', e.target.value)}
                   placeholder={
                     draft.provider === 'azure'
-                      ? '例如：my-gpt-deployment'
-                      : '输入你有访问权限的模型 ID'
+                      ? t("例如：my-gpt-deployment", "For example: my-gpt-deployment")
+                      : t("输入你有访问权限的模型 ID", "Enter a model ID you have access to")
                   }
                   spellCheck={false}
                 />
               </label>
               {draft.provider === 'azure' && (
                 <label className="form-field">
-                  <span>API 版本</span>
+                  <span>{t("API 版本", "API version")}</span>
                   <input
                     value={draft.azureApiVersion}
                     onChange={(e) => field('azureApiVersion', e.target.value)}
@@ -345,10 +367,9 @@ export function SettingsPage({
               )}
               <label className="form-field full">
                 <span>
-                  API 密钥
+                  {t("API 密钥", "API key")}
                   {(draft.provider === 'ollama' || draft.provider === 'compatible') &&
-                    '（本地服务可留空）'}{' '}
-                  <small>API Key</small>
+                    t("（本地服务可留空）", "(optional for local services)")}{' '}
                 </span>
                 <div className="password-input">
                   <KeyRound size={17} />
@@ -358,24 +379,24 @@ export function SettingsPage({
                     onChange={(e) => field('apiKey', e.target.value)}
                     placeholder={
                       draft.hasApiKey
-                        ? '密钥已保存 · 留空保留当前密钥'
+                        ? t("密钥已保存 · 留空保留当前密钥", "Key saved · Leave blank to keep it")
                         : draft.provider === 'ollama'
-                          ? '本地 Ollama 通常不需要密钥'
-                          : '输入你的 API Key'
+                          ? t("本地 Ollama 通常不需要密钥", "Local Ollama usually needs no key")
+                          : t("输入你的 API Key", "Enter your API key")
                     }
                     autoComplete="off"
                     spellCheck={false}
                   />
                   <button
                     type="button"
-                    aria-label={showKey ? '隐藏密钥' : '显示密钥'}
+                    aria-label={showKey ? t("隐藏密钥", "Hide API key") : t("显示密钥", "Show API key")}
                     onClick={() => setShowKey((value) => !value)}
                   >
                     {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
                 <small>
-                  密钥由 Windows 加密保存，不会写入学习笔记。更换服务商或接口地址后需重新填写。
+                  {t("密钥由 Windows 加密保存，不会写入学习笔记。更换服务商或接口地址后需重新填写。", "Your key is encrypted by Windows and excluded from notes. Enter it again if you change provider or endpoint.")}
                 </small>
               </label>
             </div>
@@ -386,13 +407,13 @@ export function SettingsPage({
                   checked={draft.clearApiKey || false}
                   onChange={(e) => field('clearApiKey', e.target.checked)}
                 />
-                保存时移除已存储的 API 密钥
+                {t("保存时移除已存储的 API 密钥", "Remove the stored API key when saving")}
               </label>
             )}
             <div className="connection-footer">
               <span>
                 <ShieldCheck size={15} />
-                仅连接你配置的服务
+                {t("仅连接你配置的服务", "Connects only to your configured service")}
               </span>
               <button
                 className="button secondary small"
@@ -400,11 +421,11 @@ export function SettingsPage({
                 onClick={test}
               >
                 {testing ? (
-                  <Spinner label="正在连接…" />
+                  <Spinner label={t("正在连接…", "Connecting…")} />
                 ) : (
                   <>
                     <PlugZap size={16} />
-                    测试连接
+                    {t("测试连接", "Test connection")}
                   </>
                 )}
               </button>
@@ -416,7 +437,7 @@ export function SettingsPage({
               >
                 {testResult.ok ? <Check size={17} /> : <CircleAlert size={18} />}
                 <div>
-                  <strong>{testResult.ok ? '连接成功' : '连接未完成'}</strong>
+                  <strong>{testResult.ok ? t("连接成功", "Connection successful") : t("连接未完成", "Connection failed")}</strong>
                   <p>{testResult.message}</p>
                 </div>
               </div>
@@ -428,14 +449,14 @@ export function SettingsPage({
                 <Keyboard size={21} />
               </span>
               <div>
-                <h2>语言与快捷键</h2>
-                <p>选中文字，按下组合键。学习不必打断工作。</p>
+                <h2>{t("语言与快捷键", "Learning languages and shortcuts")}</h2>
+                <p>{t("选中文字，按下组合键。学习不必打断工作。", "Select text and press a shortcut to learn as you work.")}</p>
               </div>
               <span className="settings-step">02</span>
             </div>
             <div className="form-grid">
               <label className="form-field">
-                <span>翻译目标语言</span>
+                <span>{t("翻译目标语言", "Translation target language")}</span>
                 <input
                   list="language-options"
                   value={draft.targetLanguage}
@@ -444,7 +465,7 @@ export function SettingsPage({
                 />
               </label>
               <label className="form-field">
-                <span>语法讲解语言</span>
+                <span>{t("讲解语言", "Explanation language")}</span>
                 <input
                   list="language-options"
                   value={draft.explanationLanguage}
@@ -469,15 +490,15 @@ export function SettingsPage({
             </div>
             <div className="shortcut-settings">
               <ShortcutEditor
-                label="全局语法纠错"
-                description="显示修改建议与语法讲解"
+                label={t("全局语法纠错", "Global writing check")}
+                description={t("显示纠错、专业表达与讲解", "Show corrections, professional wording and explanations")}
                 value={draft.grammarShortcut}
                 registered={shortcuts.grammar && draft.grammarShortcut === settings.grammarShortcut}
                 onChange={(value) => field('grammarShortcut', value)}
               />
               <ShortcutEditor
-                label="全局翻译替换"
-                description="翻译选中的文字，可替换回原应用"
+                label={t("全局翻译替换", "Global translation and replacement")}
+                description={t("翻译选中的文字，可替换回原应用", "Translate selected text and replace it in the original app")}
                 value={draft.translateShortcut}
                 registered={
                   shortcuts.translate && draft.translateShortcut === settings.translateShortcut
@@ -486,8 +507,8 @@ export function SettingsPage({
               />
             </div>
             <Toggle
-              label="翻译后自动替换选中文字"
-              description="仅在原窗口和选区仍然匹配时执行替换；否则保留译文供你复制。"
+              label={t("翻译后自动替换选中文字", "Automatically replace selected text after translation")}
+              description={t("仅在原窗口和选区仍然匹配时执行替换；否则保留译文供你复制。", "Replacement runs only when the original window and selection still match. Otherwise, copy the translation yourself.")}
               checked={draft.autoReplace}
               onChange={(value) => field('autoReplace', value)}
             />
@@ -498,15 +519,15 @@ export function SettingsPage({
                 <FolderOpen size={21} />
               </span>
               <div>
-                <h2>笔记与日常使用</h2>
-                <p>普通 Markdown 文件，随时阅读、备份和带走。</p>
+                <h2>{t("笔记与日常使用", "Notes and everyday use")}</h2>
+                <p>{t("普通 Markdown 文件，随时阅读、备份和带走。", "Plain Markdown files you can read, back up and take anywhere.")}</p>
               </div>
               <span className="settings-step">03</span>
             </div>
             <label className="form-field">
-              <span>学习笔记文件夹</span>
+              <span>{t("学习笔记文件夹", "Learning notes folder")}</span>
               <div className="folder-input">
-                <input value={draft.libraryPath} readOnly placeholder="选择文件夹" />
+                <input value={draft.libraryPath} readOnly placeholder={t("选择文件夹", "Choose a folder")} />
                 <button
                   className="button secondary small"
                   onClick={async () => {
@@ -519,38 +540,37 @@ export function SettingsPage({
                   }}
                 >
                   <FolderOpen size={15} />
-                  选择
+                  {t("选择", "Choose")}
                 </button>
               </div>
               <small>
-                可选择 OneDrive、Dropbox
-                等同步目录中的文件夹，让笔记同步到手机。更改路径并保存后，会在新目录生成笔记。
+                {t("可选择 OneDrive、Dropbox 等同步目录中的文件夹，让笔记同步到手机。更改路径并保存后，会在新目录生成笔记。", "Choose a folder in OneDrive, Dropbox or another sync directory to read notes on your phone. Saving a new path generates notes in that folder.")}
               </small>
             </label>
             <div className="settings-toggles">
               <Toggle
-                label="也收藏语法正确的句子"
-                description="把检查过的正确表达一并加入学习库与复习计划。"
+                label={t("也收藏语法正确的句子", "Save grammatically correct sentences too")}
+                description={t("把检查过的正确表达一并加入学习库与复习计划。", "Add correct sentences to your library and review schedule after checking them.")}
                 checked={draft.saveCorrectSentences}
                 onChange={(value) => field('saveCorrectSentences', value)}
               />
               <Toggle
-                label="开机时启动 LingoLeaf"
-                description="登录 Windows 后启动，在系统托盘中随时待命。"
+                label={t("开机时启动 LingoLeaf", "Launch LingoLeaf at login")}
+                description={t("登录 Windows 后启动，在系统托盘中随时待命。", "Start with Windows and stay available in the system tray.")}
                 checked={draft.launchAtLogin}
                 onChange={(value) => field('launchAtLogin', value)}
               />
             </div>
           </section>
           <div className="settings-savebar">
-            <span>{dirty ? '修改将在保存后生效' : '你的学习空间，准备好了'}</span>
+            <span>{dirty ? t("修改将在保存后生效", "Changes take effect after saving") : t("你的学习空间，准备好了", "Your learning space is ready")}</span>
             <button className="button primary" onClick={save} disabled={saving || testing}>
               {saving ? (
-                <Spinner label="正在保存…" />
+                <Spinner label={t("正在保存…", "Saving…")} />
               ) : (
                 <>
                   <Check size={17} />
-                  保存设置
+                  {t("保存设置", "Save settings")}
                 </>
               )}
             </button>
@@ -561,31 +581,31 @@ export function SettingsPage({
             <span className="privacy-art">
               <Leaf size={31} strokeWidth={1.4} />
             </span>
-            <span className="eyebrow">PERSONAL BY DESIGN</span>
+            <span className="eyebrow">{t("为你而设计", "PERSONAL BY DESIGN")}</span>
             <h3>
-              学习属于你，
+              {t("学习属于你，", "Your learning,")}
               <br />
-              笔记也是。
+              {t("笔记也是。", "your notes.")}
             </h3>
-            <p>句子只会在你主动纠错或翻译时，发送到所配置的模型接口。</p>
+            <p>{t("仅在你主动分析文字或继续追问时，内容才会发送到配置的模型接口。", "Text is sent to your configured model only when you request analysis or ask a follow-up.")}</p>
             <div>
               <ShieldCheck size={17} />
-              <span>API 密钥由系统加密</span>
+              <span>{t("API 密钥由系统加密", "API keys encrypted by your system")}</span>
             </div>
             <div>
               <FolderOpen size={17} />
-              <span>笔记以 Markdown 保存</span>
+              <span>{t("笔记以 Markdown 保存", "Notes saved as Markdown")}</span>
             </div>
             <div>
               <Server size={17} />
-              <span>支持本地模型运行</span>
+              <span>{t("支持本地模型运行", "Local models supported")}</span>
             </div>
-            <small>模型服务可能产生 API 费用，具体以服务商的计费方式为准。</small>
+            <small>{t("模型服务可能产生 API 费用，具体以服务商的计费方式为准。", "Model requests may incur API charges according to your provider’s pricing.")}</small>
           </div>
           <div className="settings-help">
-            <strong>刚开始使用？</strong>
-            <p>选好服务商，填入接口地址、模型与密钥，点击「测试连接」，最后保存即可。</p>
-            <p>本地模型也需要支持结构化回答。结果格式不完整时，可换用能力更强的模型。</p>
+            <strong>{t("刚开始使用？", "Getting started?")}</strong>
+            <p>{t("选好服务商，填入接口地址、模型与密钥，点击「测试连接」，最后保存即可。", "Choose a provider, enter its endpoint, model and key, test the connection, then save.")}</p>
+            <p>{t("本地模型也需要支持结构化回答。结果格式不完整时，可换用能力更强的模型。", "Local models also need to produce structured answers. If output is incomplete, try a more capable model.")}</p>
           </div>
         </aside>
       </div>

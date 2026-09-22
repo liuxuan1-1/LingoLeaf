@@ -275,6 +275,7 @@ describe.each<Provider>(['openai', 'anthropic', 'azure', 'ollama', 'compatible']
     if (provider === 'ollama') {
       expect(request.url).toContain('/api/chat');
       expect(request.body.format).toBe('json');
+      expect(request.body.options.num_predict).toBe(4096);
       expect(request.body.stream).toBe(false);
     } else if (provider === 'compatible') {
       expect(request.body).not.toHaveProperty('response_format');

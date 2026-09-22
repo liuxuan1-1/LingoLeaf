@@ -1,3 +1,4 @@
+import { useI18n } from './i18n';
 import {
   ArrowDownToLine,
   ArrowRight,
@@ -10,7 +11,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Entry, ExpressionOptions, Mode } from '../shared/types';
 import { api, errorMessage } from './bridge';
-import { entrySearchText, MODE_INFO, MODES } from './modes';
+import { entrySearchText, getModeInfo, MODES } from './modes';
 import {
   EmptyState,
   formatDate,
@@ -35,6 +36,8 @@ export function Library({
   onExport: () => Promise<void>;
   refresh: () => Promise<void>;
 }) {
+  const { language, t } = useI18n();
+  const modeInfo = getModeInfo(language);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [tag, setTag] = useState('');
@@ -97,7 +100,7 @@ export function Library({
       if (selected?.id === deleteTarget.id) setSelected(null);
       setDeleteTarget(null);
       await refresh();
-      notify('这条学习笔记已删除。');
+      notify(t("这条学习笔记已删除。", "Learning note deleted."));
     } catch (e) {
       notify(errorMessage(e), 'error');
     } finally {
@@ -107,13 +110,13 @@ export function Library({
   return (
     <>
       <SectionHeading
-        eyebrow="A COLLECTION OF SMALL DISCOVERIES"
-        title="我的学习库"
-        description="把遇见的表达留下来。每一条笔记，都是下一次进步的起点。"
+        eyebrow={t("收集每一次发现", "A COLLECTION OF SMALL DISCOVERIES")}
+        title={t("我的学习库", "My library")}
+        description={t("把遇见的表达留下来。每一条笔记，都是下一次进步的起点。", "Keep the expressions you discover. Every note is a starting point for progress.")}
         action={
           <button className="button secondary" onClick={onExport}>
             <ArrowDownToLine size={17} />
-            导出 Markdown
+            {t("导出 Markdown", "Export Markdown")}
           </button>
         }
       />
@@ -122,8 +125,8 @@ export function Library({
           <Search size={18} />
           <input
             ref={searchRef}
-            aria-label="搜索学习笔记"
-            placeholder="搜索句子、语法、要点、追问…"
+            aria-label={t("搜索学习笔记", "Search learning notes")}
+            placeholder={t("搜索句子、语法、要点、追问…", "Search sentences, grammar, key points, follow-ups…")}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -134,34 +137,34 @@ export function Library({
         </div>
         <select
           className="select-control"
-          aria-label="按标签筛选"
+          aria-label={t("按标签筛选", "Filter by tag")}
           value={tag}
           onChange={(e) => {
             setTag(e.target.value);
             setLimit(18);
           }}
         >
-          <option value="">所有标签</option>
+          <option value="">{t("所有标签", "All tags")}</option>
           {tags.map((value) => (
             <option key={value}>{value}</option>
           ))}
         </select>
         <select
           className="select-control"
-          aria-label="排序方式"
+          aria-label={t("排序方式", "Sort order")}
           value={sort}
           onChange={(e) => setSort(e.target.value)}
         >
-          <option value="newest">最近添加</option>
-          <option value="due">优先复习</option>
+          <option value="newest">{t("最近添加", "Newest first")}</option>
+          <option value="due">{t("优先复习", "Review due first")}</option>
         </select>
       </div>
       <div className="library-filter-row">
         <div className="filter-tabs">
           {[
-            { id: 'all', label: '全部积累' },
-            ...MODES.map((mode) => ({ id: mode, label: MODE_INFO[mode].label })),
-            { id: 'due', label: '待复习' },
+            { id: 'all', label: t("全部积累", "All notes") },
+            ...MODES.map((mode) => ({ id: mode, label: modeInfo[mode].label })),
+            { id: 'due', label: t("待复习", "Due for review") },
           ].map((item) => (
             <button
               className={filter === item.id ? 'active' : ''}
@@ -176,17 +179,17 @@ export function Library({
             </button>
           ))}
         </div>
-        <span className="results-count">共 {filtered.length} 条笔记</span>
+        <span className="results-count">{t('共 {count} 条笔记', '{count} notes', { count: filtered.length })}</span>
       </div>
       {!entries.length ? (
         <div className="card">
           <EmptyState
             icon={<Sprout size={34} strokeWidth={1.4} />}
-            title="给你的学习库，种下第一句话"
-            description="在工作台纠错、翻译、阅读解析或组织想法。需要保存的结果会自动收录，并生成 Markdown 笔记。"
+            title={t("给你的学习库，种下第一句话", "Start your library with one sentence")}
+            description={t("在工作台纠错、翻译、阅读解析或组织想法。需要保存的结果会自动收录，并生成 Markdown 笔记。", "Improve writing, understand a text or express an idea in Practice. Saved results are added to your library and written to Markdown.")}
             action={
               <button className="button primary" onClick={() => onPractice()}>
-                开始第一句练习
+                {t("开始第一句练习", "Start practicing")}
                 <ArrowRight size={16} />
               </button>
             }
@@ -196,8 +199,8 @@ export function Library({
         <div className="card">
           <EmptyState
             icon={<Search size={30} />}
-            title="没有找到相符的笔记"
-            description="换一个关键词，或清除筛选条件再试试。"
+            title={t("没有找到相符的笔记", "No matching notes")}
+            description={t("换一个关键词，或清除筛选条件再试试。", "Try another keyword or clear the filters.")}
             action={
               <button
                 className="button secondary"
@@ -207,7 +210,7 @@ export function Library({
                   setFilter('all');
                 }}
               >
-                清除筛选
+                {t("清除筛选", "Clear filters")}
               </button>
             }
           />
@@ -215,16 +218,16 @@ export function Library({
       ) : (
         <div className="library-grid">
           {filtered.slice(0, limit).map((entry) => {
-            const Icon = MODE_INFO[entry.mode].icon;
+            const Icon = modeInfo[entry.mode].icon;
             return (
             <article className="note-card" key={entry.id}>
               <button className="note-open" onClick={() => setSelected(entry)}>
                 <div className="note-top">
                   <span className={`note-kind ${entry.mode}`}>
                     <Icon size={15} />
-                    {MODE_INFO[entry.mode].note}
+                    {modeInfo[entry.mode].note}
                   </span>
-                  <time dateTime={entry.createdAt}>{formatDate(entry.createdAt)}</time>
+                  <time dateTime={entry.createdAt}>{formatDate(entry.createdAt, language)}</time>
                 </div>
                 <p className="note-original">{entry.original}</p>
                 <div className="note-divider">
@@ -247,13 +250,13 @@ export function Library({
                 >
                   <Clock3 size={13} />
                   {new Date(entry.review.dueAt).getTime() <= Date.now()
-                    ? '该温习了'
-                    : `${formatDate(entry.review.dueAt)}复习`}
+                    ? t("该温习了", "Ready to review")
+                    : t('{date}复习', 'Review {date}', { date: formatDate(entry.review.dueAt, language) })}
                 </span>
                 <button
                   className="icon-button"
-                  aria-label={`删除笔记：${entry.original}`}
-                  title="删除笔记"
+                  aria-label={t('删除笔记：{text}', 'Delete note: {text}', { text: entry.original })}
+                  title={t("删除笔记", "Delete note")}
                   onClick={() => setDeleteTarget(entry)}
                 >
                   <Trash2 size={15} />
@@ -266,30 +269,30 @@ export function Library({
       {filtered.length > limit && (
         <div className="load-more">
           <button className="button secondary" onClick={() => setLimit((value) => value + 18)}>
-            再看 18 条笔记
+            {t("再看 18 条笔记", "Show 18 more notes")}
           </button>
         </div>
       )}
       {entries.length > 0 && (
         <div className="library-bottom">
           <BookOpen size={17} />
-          <p>这些句子，也值得再见一面。</p>
+          <p>{t("这些句子，也值得再见一面。", "These sentences are worth another look.")}</p>
           <button className="text-button" onClick={onReview}>
-            去复习
+            {t("去复习", "Start reviewing")}
             <ArrowRight size={15} />
           </button>
         </div>
       )}
       {selected && (
-        <Modal title="一条属于你的语言笔记" onClose={() => setSelected(null)}>
+        <Modal title={t("一条属于你的语言笔记", "Your language note")} onClose={() => setSelected(null)}>
           <div className="modal-original">
-            <span className="eyebrow">YOUR ORIGINAL SENTENCE</span>
+            <span className="eyebrow">{t("你的原句", "YOUR ORIGINAL SENTENCE")}</span>
             <p className="text-content">{selected.original}</p>
           </div>
           <ResultView result={selected} notify={notify} />
           <div className="modal-footer">
             <span>
-              添加于 {formatDate(selected.createdAt)} · 已复习 {selected.review.repetitions} 次
+              {t('添加于 {date} · 已复习 {count} 次', 'Added {date} · Reviewed {count} times', { date: formatDate(selected.createdAt, language), count: selected.review.repetitions })}
             </span>
             <button
               className="button secondary"
@@ -298,16 +301,16 @@ export function Library({
                 setSelected(null);
               }}
             >
-              再练一次
+              {t("再练一次", "Practice again")}
               <ArrowRight size={15} />
             </button>
           </div>
         </Modal>
       )}
       {deleteTarget && (
-        <Modal title="删除这条学习笔记？" onClose={() => !deleting && setDeleteTarget(null)}>
+        <Modal title={t("删除这条学习笔记？", "Delete this learning note?")} onClose={() => !deleting && setDeleteTarget(null)}>
           <div className="confirm-content">
-            <p>对应的学习记录和 Markdown 笔记会一并删除，此操作无法在应用内撤销。</p>
+            <p>{t("对应的学习记录和 Markdown 笔记会一并删除，此操作无法在应用内撤销。", "The learning record and its Markdown note will both be deleted. This cannot be undone in the app.")}</p>
             <blockquote className="text-content">{deleteTarget.original}</blockquote>
           </div>
           <div className="modal-footer">
@@ -316,10 +319,10 @@ export function Library({
               disabled={deleting}
               onClick={() => setDeleteTarget(null)}
             >
-              保留笔记
+              {t("保留笔记", "Keep note")}
             </button>
             <button className="button danger" disabled={deleting} onClick={deleteEntry}>
-              {deleting ? '正在删除…' : '删除笔记'}
+              {deleting ? t("正在删除…", "Deleting…") : t("删除笔记", "Delete note")}
             </button>
           </div>
         </Modal>
