@@ -36,7 +36,7 @@ For English-to-Chinese reading, set Translation target language to **English** a
 
 Professional wording is an optional style improvement, even for grammatically correct input. It has its own copy button and explains what makes the wording more suitable for work or formal communication. The grammar verdict and minimal correction stay separate; applying a grammar correction uses that correction, not the professional version. Existing notes remain readable; analyze again to add a professional version to a new note.
 
-![A separate professional rewrite with explanations and writing tips](docs/images/professional-en-dark.jpg)
+![A separate professional rewrite with explanations and writing tips](docs/images/professional-writing-en-dark.jpg)
 
 Use the follow-up panel on a result, library note, review answer, or selection popup to ask about an explanation or refine an expression. The model receives that result, your question, and recent conversation turns using the same configured provider. Each result supports up to 20 question-and-answer turns. Long histories remain saved; only recent complete turns within a 48,000-character history budget are sent to the model.
 
