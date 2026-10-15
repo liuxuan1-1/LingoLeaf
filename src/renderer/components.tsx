@@ -212,7 +212,7 @@ export function ResultView({
           <span>{current.field}{result.mode === 'read' && saved.targetLanguage ? ` · ${saved.targetLanguage}` : ''}</span>
           <CopyButton text={result.corrected} notify={notify} />
         </div>
-        <p className="text-content" lang={result.mode === 'grammar' ? 'en' : undefined}>
+        <p className="text-content" lang="">
           {result.corrected}
         </p>
       </div>}
@@ -304,7 +304,7 @@ export function ResultView({
             <CopyButton text={result.professional.text} notify={notify} label={!result.grammarTone || result.grammarTone === 'professional' ? t('复制专业表达', 'Copy professional version') : t('复制语气改写', 'Copy tone rewrite')} />
           </div>
           <p className="professional-caption">{t('可选的风格提升，不代表原句存在语法错误。根据对象和场景选择使用。', 'An optional style improvement, not a grammar error. Choose it when it suits your audience and context.')}</p>
-          <p className="professional-text text-content" lang="en">{result.professional.text}</p>
+          <p className="professional-text text-content" lang="">{result.professional.text}</p>
           <p className="text-content">{result.professional.explanation}</p>
           {!!result.professional.improvements.length && <>
             <h5>{t('可以学到的表达要点', 'What you can learn from this rewrite')}</h5>

@@ -125,7 +125,7 @@ export function Workbench({ settings, notify, onSettings, initial, onDone, syncE
   };
   const copy = {
     grammar: {
-      label: t('想改进哪一段英文？', 'What would you like to improve?'), direction: t('英语', 'English'),
+      label: t('想改进哪一段英文？', 'What would you like to improve?'), direction: `→ ${settings.targetLanguage}`,
       help: t('先修正语法，再按所选语气优化表达。也可以直接粘贴截图，检查你是否回答得当。', 'Get a grammar correction and a separate rewrite in your chosen tone. You can also paste a screenshot to review your reply.'),
       placeholder: t('例如：She go to school every day.', 'For example: She go to school every day.'),
       samples: ['She go to school every day.', 'I am agree with you.'],

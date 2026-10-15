@@ -430,8 +430,8 @@ export class LibraryStore {
         createdAt: timestamp.toISOString(),
         updatedAt: timestamp.toISOString(),
         review: initialReview(timestamp),
-        sourceLanguage: content.mode === 'grammar' ? 'English' : content.mode === 'read' ? settings.targetLanguage : 'Auto',
-        targetLanguage: content.mode === 'grammar' ? 'English' : content.mode === 'read' ? settings.explanationLanguage : settings.targetLanguage,
+        sourceLanguage: content.mode === 'read' ? settings.targetLanguage : 'Auto',
+        targetLanguage: content.mode === 'read' ? settings.explanationLanguage : settings.targetLanguage.trim() || 'English',
       };
       const entries = [...this.entries, entry];
       await this.persistEntries(entries);

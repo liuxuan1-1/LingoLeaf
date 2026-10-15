@@ -227,9 +227,11 @@ describe('provider HTTP adapters', () => {
   });
   it('translates the complete corrected text into the explanation language and preserves layout', async () => {
     const original = 'Daily plan:\r\n\r\n1. She go to school every day.\r\n   - She studies English.';
-    const corrected = original.replace('She go', 'She goes');
+    const corrected = 'Tagesplan:\r\n\r\n1. Sie geht jeden Tag zur Schule.\r\n   - Sie lernt Englisch.';
     const translation = '毎日の予定：\r\n\r\n1. 彼女は毎日学校に行きます。\r\n   - 彼女は英語を勉強します。';
-    payload = envelope({ ...incorrect, corrected, translation });
+    payload = envelope({ ...incorrect, needsTranslation: true, corrected, translation,
+      professional: { ...incorrect.professional, text: corrected },
+    });
     const result = await analyzeText(original, 'grammar', {
       ...config(),
       explanationLanguage: '日本語',
@@ -239,7 +241,7 @@ describe('provider HTTP adapters', () => {
     expect(captured).toHaveLength(1);
     expect(captured[0].body.messages[0].content).toContain('entire corrected text into "日本語"');
     expect(captured[0].body.messages[0].content).toContain('paragraph breaks, blank lines, list markers');
-    expect(captured[0].body.messages[0].content).not.toContain('Deutsch');
+    expect(captured[0].body.messages[0].content).toContain('"Deutsch"');
   });
   it('does not retain an unsolicited second translation in translation mode', async () => {
     const { professional: _professional, ...translationOutput } = good;

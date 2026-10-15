@@ -41,6 +41,55 @@ afterEach(async () => {
   await fs.rm(directory, { recursive: true, force: true });
 });
 
+describe('grammar language completion storage', () => {
+  it.each([
+    {
+      name: 'a grammatical Chinese source', targetLanguage: 'English',
+      original: '她每天去上学。\n\n明天她也会去。',
+      corrected: 'She goes to school every day.\n\nShe will go tomorrow too.',
+      isCorrect: true, issues: [],
+    },
+    {
+      name: 'a mixed-language source with a grammar error', targetLanguage: 'English',
+      original: 'she go to school 每一天', corrected: 'She goes to school every day.',
+      isCorrect: false, issues: analysis.issues,
+    },
+    {
+      name: 'a Chinese source completed in a non-English target', targetLanguage: 'Español',
+      original: '她每天去上学。', corrected: 'Ella va a la escuela todos los días.',
+      isCorrect: true, issues: [],
+    },
+  ])('keeps $name and its configured language across Markdown and restart', async ({ name: _name, targetLanguage, ...completion }) => {
+    const store = makeStore();
+    await store.init();
+    const settings = { ...store.getSettings(), targetLanguage, saveCorrectSentences: false };
+    const completed: Analysis = {
+      ...analysis, ...completion, translation: '她每天去上学。',
+      explanation: '将中文表达为目标语言；是否有语法错误单独判断。',
+      professional: { text: completion.corrected, explanation: '表达自然清晰。', improvements: ['保留原句意思。'] },
+    };
+    const saved = await store.add(completed, settings);
+    expect(saved).toMatchObject({ ...completed, sourceLanguage: 'Auto', targetLanguage });
+    const noteDirectory = path.join(store.getLibraryDirectory(), 'entries');
+    const notePath = path.join(noteDirectory, (await fs.readdir(noteDirectory))[0]);
+    const markdown = await fs.readFile(notePath, 'utf8');
+    expect(markdown).toBe(renderEntryMarkdown(saved));
+    expect(markdown).toContain('- 原文语言：Auto');
+    expect(markdown).toContain(`- 目标语言：${targetLanguage}`);
+    expect(markdown).toContain(`## 原句\n\n\`\`\`text\n${completed.original}\n\`\`\``);
+    expect(markdown).toContain(`## 正确表达\n\n\`\`\`text\n${completed.corrected}\n\`\`\``);
+    if (completed.isCorrect) expect(markdown).toContain('没有需要纠正的语法错误。');
+
+    await fs.appendFile(notePath, '\nMy language-learning annotation.\n');
+    const annotated = await fs.readFile(notePath, 'utf8');
+    await store.saveSettings({ ...store.getSettings(), targetLanguage: '日本語' });
+    const restarted = makeStore();
+    await restarted.init();
+    expect(restarted.list()).toEqual([saved]);
+    expect(await fs.readFile(notePath, 'utf8')).toBe(annotated);
+  });
+});
+
 describe('effort, grammar tone and screenshot review storage', () => {
   it('persists effort while preserving credentials, and rolls back failed writes', async () => {
     const store = makeStore();

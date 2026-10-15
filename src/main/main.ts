@@ -196,6 +196,7 @@ async function persist(result: Analysis, settings: Settings) {
   if (
     result.mode !== 'grammar' ||
     !result.isCorrect ||
+    result.corrected !== result.original ||
     result.issues.length ||
     settings.saveCorrectSentences
   ) {

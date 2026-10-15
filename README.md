@@ -11,7 +11,7 @@ An English-learning companion for Windows. Select a sentence, check its grammar 
 ## Everyday use
 
 1. Open Settings (偏好设置), choose OpenAI, an OpenAI-compatible service, Anthropic, Azure OpenAI, or Ollama, and enter your endpoint, model, and API key. Test the connection and save.
-2. Select text in another application and press **Ctrl + Shift + G**. A popup shows whether the sentence is grammatically correct, highlights specific errors, and explains the rules with new examples. It also translates the corrected text into your configured explanation language, with a separate copy button for that translation. Style suggestions are labeled separately from grammar errors.
+2. Select text in another application and press **Ctrl + Shift + G**. A popup shows whether the sentence is grammatically correct, highlights specific errors, and explains the rules with new examples. Source-language words and mixed-language drafts are completed in your configured target language. It also translates the corrected text into your configured explanation language, with a separate copy button for that translation. Style suggestions are labeled separately from grammar errors.
 3. Press **Ctrl + Shift + T** to translate the selected text into your configured target language. By default, LingoLeaf replaces the selection when it can verify an editable text range. If the original window or selection has changed, replacement is canceled and you can copy the translation from the result. Both shortcuts are customizable.
 4. Search your sentences in the Learning Library. In Review, recall the answer before revealing it, then rate how well you remembered it to schedule your next review.
 5. Start a connection under Mobile Sync and scan the QR code with your phone. When both devices are on the same trusted network, mobile review progress is saved directly to the desktop library.
@@ -24,7 +24,7 @@ The practice page has three task cards, with a clear selected border and checkma
 
 | Mode | What to enter | What you get |
 | --- | --- | --- |
-| Improve English (修改英文) | An English sentence, a speaking script, or conversation screenshots | Choose text correction with a tone, or check your reply against the question shown in a screenshot |
+| Improve English (修改英文) | A sentence, a mixed-language draft, a speaking script, or conversation screenshots | Correct and complete text in your target language with a separate tone rewrite, or check your reply against the question shown in a screenshot |
 | Understand a text (读懂外语) | Text in your target language, such as English | A full translation into your explanation language, source-anchored grammar notes, and key points |
 | Express an idea (表达想法) | A complete source text or rough ideas | Choose **Translate a text** for a faithful translation, or **Shape an idea** for suggested wording, alternatives, context/tone controls, and clarification questions |
 
@@ -35,6 +35,8 @@ For English-to-Chinese reading, set Translation target language to **English** a
 Professional wording is an optional style improvement, even for grammatically correct input. It has its own copy button and explains what makes the wording more suitable for work or formal communication. The grammar verdict and minimal correction stay separate; applying a grammar correction uses that correction, not the professional version. Existing notes remain readable; analyze again to add a professional version to a new note.
 
 Choose **Professional, Spoken / presentation, Casual, Formal, or Neutral** when checking text. For a speaking script, choose **Spoken / presentation** to get wording that sounds natural aloud. The minimal grammar correction remains separate from the rewrite in your chosen tone.
+
+If you do not know a phrase in your target language, leave it in your own language while checking text: with English selected, `she go to school 每一天` becomes `She goes to school every day.` A complete source-language sentence also works. Both the correction and tone rewrite use the target language; explanations and the meaning translation use the explanation language. Language completion is saved for learning even when no grammar error is found, without treating the source-language words themselves as errors. Existing notes keep their original content; analyze them again to get the updated result.
 
 ### Review a reply from an image
 
@@ -52,7 +54,7 @@ Follow-ups accept normal conversational answers as well as older compatible serv
 
 ## Download and development
 
-Current version: **v0.5.0 preview**. Download the portable Windows x64 executable from [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases), then configure your own model service after launching it. Exit an older running version from its tray menu before opening the new executable.
+Current version: **v0.5.1 preview**. Download the portable Windows x64 executable from [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases), then configure your own model service after launching it. Exit an older running version from its tray menu before opening the new executable.
 
 [![Windows checks](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml)
 
