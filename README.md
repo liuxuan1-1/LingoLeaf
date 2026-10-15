@@ -54,12 +54,14 @@ Follow-ups accept normal conversational answers as well as older compatible serv
 
 ## Download and development
 
-Current version: **v0.5.1 preview**. Choose the portable executable for your Windows device from [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases/tag/v0.5.1), then configure your own model service after launching it. No installer is needed.
+Current version: **v0.5.1 preview**. Choose the portable download for your Windows device from [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases/tag/v0.5.1), then configure your own model service after launching it. No installer is needed.
 
 | Download | Device | Supported Windows |
 | --- | --- | --- |
 | [LingoLeaf-0.5.1-x64.exe](https://github.com/liuxuan1-1/LingoLeaf/releases/download/v0.5.1/LingoLeaf-0.5.1-x64.exe) | Intel / AMD 64-bit PCs | Windows 10 / 11 |
-| [LingoLeaf-0.5.1-arm64.exe](https://github.com/liuxuan1-1/LingoLeaf/releases/download/v0.5.1/LingoLeaf-0.5.1-arm64.exe) | ARM64 PCs, such as Snapdragon laptops and Surface Pro X | Windows 11 |
+| [LingoLeaf-0.5.1-arm64.zip](https://github.com/liuxuan1-1/LingoLeaf/releases/download/v0.5.1/LingoLeaf-0.5.1-arm64.zip) | ARM64 PCs, such as Snapdragon laptops and Surface Pro X | Windows 11 |
+
+For x64, run the downloaded `.exe` directly. For ARM64, extract the **entire ZIP** to a folder and run `LingoLeaf.exe` inside it. Keep the extracted files together; moving only the executable will prevent the app from starting.
 
 To check your device, open Windows **Settings → System → About → System type**. Both builds use the same settings, API keys, and learning records under the same Windows user account. Exit the running version from its tray menu before upgrading or switching architectures.
 
@@ -80,7 +82,7 @@ npm run build
 npm run package
 ```
 
-`npm run package` generates both x64 and ARM64 portable executables in `release/`. To build only one architecture, use `npm run package:x64` or `npm run package:arm64`. `npm run package:dir` generates unpacked app directories for both architectures.
+`npm run package` generates an x64 portable EXE and an ARM64 ZIP in `release/`. To build only one architecture, use `npm run package:x64` for the EXE or `npm run package:arm64` for the ZIP. `npm run package:dir` generates unpacked app directories for both architectures.
 
 Builds currently do not include code signing. If you distribute your own build, sign it and check security prompts on the target Windows environment before release. Do not commit runtime data or API keys.
 

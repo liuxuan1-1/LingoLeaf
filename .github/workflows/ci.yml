@@ -13,8 +13,12 @@ jobs:
         include:
           - runner: windows-latest
             arch: x64
+            target: portable
+            extension: exe
           - runner: windows-11-arm
             arch: arm64
+            target: zip
+            extension: zip
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -36,14 +40,28 @@ jobs:
           if (-not $checks.ok -or $checks.inputSize -ne 40 -or $checks.interactiveActions -ne 0) { throw 'Unexpected Windows helper layout or behavior' }
       - run: npm run build
       - name: Package Windows application
-        run: npx electron-builder --win portable --${{ matrix.arch }} --publish never
+        run: npx electron-builder --win ${{ matrix.target }} --${{ matrix.arch }} --publish never
       - name: Verify packaged Electron runtime
         shell: pwsh
         run: |
-          $portable = Get-Item release/LingoLeaf-*-${{ matrix.arch }}.exe
-          node scripts/verify-windows-package.mjs --arch ${{ matrix.arch }} --portable $portable.FullName
-      - uses: actions/upload-artifact@v4
+          $artifact = Get-Item release/LingoLeaf-*-${{ matrix.arch }}.${{ matrix.extension }}
+          if ('${{ matrix.target }}' -eq 'zip') {
+            Expand-Archive -LiteralPath $artifact.FullName -DestinationPath release/arm64-verification
+            node scripts/verify-windows-package.mjs --arch ${{ matrix.arch }} --dir release/arm64-verification
+          } else {
+            node scripts/verify-windows-package.mjs --arch ${{ matrix.arch }} --portable $artifact.FullName
+          }
+      - name: Upload Windows application
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
         with:
           name: LingoLeaf-windows-${{ matrix.arch }}
-          path: release/LingoLeaf-*-${{ matrix.arch }}.exe
+          path: release/LingoLeaf-*-${{ matrix.arch }}.${{ matrix.extension }}
           if-no-files-found: error
+      - name: Upload package verification diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LingoLeaf-package-check-${{ matrix.arch }}
+          path: test-results/package-check-${{ matrix.arch }}/
+          if-no-files-found: ignore

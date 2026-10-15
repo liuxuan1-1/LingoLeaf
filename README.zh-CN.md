@@ -61,7 +61,9 @@
 | 下载 | 适用设备 | 支持的 Windows |
 | --- | --- | --- |
 | [LingoLeaf-0.5.1-x64.exe](https://github.com/liuxuan1-1/LingoLeaf/releases/download/v0.5.1/LingoLeaf-0.5.1-x64.exe) | Intel / AMD 64 位电脑 | Windows 10 / 11 |
-| [LingoLeaf-0.5.1-arm64.exe](https://github.com/liuxuan1-1/LingoLeaf/releases/download/v0.5.1/LingoLeaf-0.5.1-arm64.exe) | ARM64 电脑，例如骁龙笔记本、Surface Pro X | Windows 11 |
+| [LingoLeaf-0.5.1-arm64.zip](https://github.com/liuxuan1-1/LingoLeaf/releases/download/v0.5.1/LingoLeaf-0.5.1-arm64.zip) | ARM64 电脑，例如骁龙笔记本、Surface Pro X | Windows 11 |
+
+x64 版直接运行下载的 `.exe`。ARM64 版请将 **整个 ZIP 解压** 到一个文件夹，再运行其中的 `LingoLeaf.exe`。请保留同目录下的其他文件，不要单独移动 EXE，否则应用无法启动。
 
 不确定设备架构时，可在 Windows「设置 → 系统 → 系统信息 → 系统类型」查看。两个版本在同一 Windows 用户下使用相同的设置、密钥和学习记录。升级或切换架构前，请先从托盘完全退出正在运行的版本。
 
@@ -84,7 +86,7 @@ npm run build
 npm run package
 ```
 
-`npm run package` 会在 `release/` 生成 x64 和 ARM64 两种免安装程序。只需一种架构时，使用 `npm run package:x64` 或 `npm run package:arm64`。`npm run package:dir` 会生成两种架构的未封装应用目录。
+`npm run package` 会在 `release/` 生成 x64 免安装 EXE 和 ARM64 ZIP。只需一种架构时，使用 `npm run package:x64` 生成 EXE，或使用 `npm run package:arm64` 生成 ZIP。`npm run package:dir` 会生成两种架构的未封装应用目录。
 
 目前构建不包含代码签名。发布前应自行签名，并在目标 Windows 环境检查安全提示。不要提交运行数据或密钥。
 

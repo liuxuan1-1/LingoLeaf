@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
 import { normalize, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 
 const { values } = parseArgs({
@@ -47,6 +46,7 @@ if (values['skip-runtime']) {
 } else {
   assert.equal(process.platform, 'win32', 'Runtime smoke check needs Windows');
   assert.equal(process.arch, arch, `Use a native ${arch} runner, or --skip-runtime for static checks only`);
+  const runtimeStarted = Date.now();
   const probe = spawnSync(executable, ['-e', 'console.log(JSON.stringify({arch:process.arch,platform:process.platform,electron:process.versions.electron}))'], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
     windowsHide: true,
@@ -59,34 +59,75 @@ if (values['skip-runtime']) {
   assert.equal(runtime.platform, 'win32');
   assert.equal(runtime.arch, arch);
   assert.ok(runtime.electron, 'Expected the packaged Electron runtime');
-  console.log(`Verified ${metadata.version} ${arch} package and native Electron ${runtime.electron} Node-mode startup.`);
+  console.log(`Verified ${metadata.version} ${arch} package and native Electron ${runtime.electron} Node-mode startup in ${Date.now() - runtimeStarted} ms.`);
 
   if (values.portable) {
     const portable = resolve(values.portable);
-    const temporary = mkdtempSync(resolve(tmpdir(), 'lingoleaf-package-check-'));
+    const diagnostics = resolve('test-results', `package-check-${arch}`);
+    mkdirSync(diagnostics, { recursive: true });
+    const temporary = mkdtempSync(resolve(diagnostics, 'probe-'));
     const script = resolve(temporary, 'probe.cjs');
     const marker = resolve(temporary, 'result.json');
+    let verified = false;
     try {
-      writeFileSync(script, `require('node:fs').writeFileSync(${JSON.stringify(marker)}, JSON.stringify({arch:process.arch,platform:process.platform,electron:process.versions.electron,portable:process.env.PORTABLE_EXECUTABLE_FILE}));`);
-      const launcher = spawnSync(portable, [script], {
-        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-        windowsHide: true,
-        timeout: 60000,
-        encoding: 'utf8',
-      });
-      assert.ifError(launcher.error);
-      assert.equal(launcher.status, 0, `Portable launcher failed: ${launcher.stderr}`);
+      writeFileSync(script, `const fs = require('node:fs'); try { fs.writeFileSync(${JSON.stringify(marker)}, JSON.stringify({arch:process.arch,platform:process.platform,electron:process.versions.electron,portable:process.env.PORTABLE_EXECUTABLE_FILE})); } catch (error) { fs.writeFileSync(${JSON.stringify(marker)}, JSON.stringify({error:String(error),stack:error.stack})); process.exitCode = 1; }`);
+      const launcher = await runPortable(portable, script, marker);
+      writeFileSync(resolve(diagnostics, 'launcher.json'), JSON.stringify({
+        portable, bytes: statSync(portable).size, temporary, ...launcher,
+        marker: existsSync(marker) ? readFileSync(marker, 'utf8') : null,
+      }, null, 2));
+      assert.ok(!launcher.timedOut, `Portable launcher timed out after ${launcher.elapsedMs} ms; runtime marker present: ${existsSync(marker)}. See ${diagnostics}`);
+      assert.equal(launcher.status, 0, `Portable launcher failed after ${launcher.elapsedMs} ms; runtime marker present: ${existsSync(marker)}. stdout: ${launcher.stdout}; stderr: ${launcher.stderr}. See ${diagnostics}`);
       const launched = JSON.parse(readFileSync(marker, 'utf8'));
       assert.equal(launched.platform, 'win32');
       assert.equal(launched.arch, arch);
       assert.equal(launched.electron, runtime.electron);
       assert.equal(resolve(launched.portable).toLowerCase(), portable.toLowerCase());
-      console.log(`Verified portable launcher extracted and started the ${arch} Electron runtime.`);
+      verified = true;
+      console.log(`Verified portable launcher extracted and started the ${arch} Electron runtime in ${launcher.elapsedMs} ms.`);
     } finally {
-      // Delete only the two files created here; never recursively remove a computed directory.
-      rmSync(script, { force: true });
-      rmSync(marker, { force: true });
-      rmdirSync(temporary);
+      // Preserve failed probes for CI artifacts. Delete only files created here on success.
+      if (verified) {
+        rmSync(script, { force: true });
+        rmSync(marker, { force: true });
+        rmdirSync(temporary);
+      }
     }
   }
+}
+
+function runPortable(portable, script, marker) {
+  return new Promise((resolveResult, reject) => {
+    const started = Date.now();
+    console.log('Starting portable extraction and runtime probe (180 s limit).');
+    const child = spawn(portable, [script], {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+    let fallback;
+    const heartbeat = setInterval(() => {
+      console.log(`Portable probe: ${Date.now() - started} ms elapsed; runtime marker present: ${existsSync(marker)}.`);
+    }, 30000);
+    const deadline = setTimeout(() => {
+      timedOut = true;
+      // Terminate only this probe's process tree, including any extracted child.
+      if (child.pid) spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: 10000 });
+      fallback = setTimeout(() => finish(null), 5000);
+    }, 180000);
+    function finish(status, error) {
+      clearInterval(heartbeat);
+      clearTimeout(deadline);
+      clearTimeout(fallback);
+      if (error) reject(error);
+      else resolveResult({ status, timedOut, elapsedMs: Date.now() - started, stdout, stderr });
+    }
+    child.stdout.on('data', chunk => { stdout = (stdout + chunk.toString()).slice(-8192); });
+    child.stderr.on('data', chunk => { stderr = (stderr + chunk.toString()).slice(-8192); });
+    child.on('error', error => finish(null, error));
+    child.on('close', status => finish(status));
+  });
 }
