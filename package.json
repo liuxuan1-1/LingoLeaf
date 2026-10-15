@@ -13,8 +13,10 @@
     "start": "electron .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "package": "npm run build && electron-builder --win portable --publish never",
-    "package:dir": "npm run build && electron-builder --win --dir --publish never"
+    "package": "npm run build && electron-builder --win portable --x64 --arm64 --publish never",
+    "package:x64": "npm run build && electron-builder --win portable --x64 --publish never",
+    "package:arm64": "npm run build && electron-builder --win portable --arm64 --publish never",
+    "package:dir": "npm run build && electron-builder --win --dir --x64 --arm64 --publish never"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
@@ -57,9 +59,18 @@
         "to": "icon.png"
       }
     ],
+    "portable": {
+      "buildUniversalInstaller": false
+    },
     "win": {
       "target": [
-        "portable"
+        {
+          "target": "portable",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ],
       "artifactName": "LingoLeaf-${version}-${arch}.${ext}",
       "signAndEditExecutable": true,

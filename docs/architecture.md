@@ -6,6 +6,8 @@ React renderer → narrow Electron preload bridge → Electron main process → 
 
 The Windows helper is a long-lived, hidden PowerShell 5.1 process compiling the bundled C# bridge once. User text travels as JSON over standard input; text is never interpolated into executable script. Capture contexts remain in the helper, where selection identity and source window are revalidated before replacement. Timeouts dispose the helper rather than allowing delayed input to run after the user has moved on.
 
+Windows distribution targets x64 on Windows 10/11 and ARM64 on Windows 11. Default packaging builds both architectures, with separate executable filenames. The C# helper compiles on the user's machine and uses pointer-sized Win32 structures; no prebuilt x64 native addon is required. The portable NSIS launcher may itself be x86, while the extracted Electron runtime is native to the selected architecture. CI uses native x64 and ARM64 Windows runners, checks the helper without interactive input, verifies the embedded PE architecture, and starts both the packaged runtime and portable launcher in Electron Node mode. These smoke checks do not establish full interactive clipboard or selection compatibility on physical devices.
+
 ## Capture and replace
 
 1. Global shortcut fires; an in-flight capture is not started twice.

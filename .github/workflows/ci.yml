@@ -6,19 +6,44 @@ permissions:
   contents: read
 jobs:
   test-and-package:
-    runs-on: windows-latest
+    name: Windows ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: x64
+          - runner: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          architecture: ${{ matrix.arch }}
           cache: npm
+      - name: Verify native runner architecture
+        run: node -e "if (process.platform !== 'win32' || process.arch !== '${{ matrix.arch }}') throw new Error('Expected Windows ${{ matrix.arch }}, received ' + process.platform + ' ' + process.arch)"
       - run: npm ci
       - run: npm test
+      - name: Verify Windows helper layout
+        shell: pwsh
+        run: |
+          $result = & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -STA -ExecutionPolicy Bypass -File native/windows-helper.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { throw 'Windows helper self-test failed' }
+          $checks = $result | ConvertFrom-Json
+          if (-not $checks.ok -or $checks.inputSize -ne 40 -or $checks.interactiveActions -ne 0) { throw 'Unexpected Windows helper layout or behavior' }
       - run: npm run build
       - name: Package Windows application
-        run: npx electron-builder --win --dir --publish never
+        run: npx electron-builder --win portable --${{ matrix.arch }} --publish never
+      - name: Verify packaged Electron runtime
+        shell: pwsh
+        run: |
+          $portable = Get-Item release/LingoLeaf-*-${{ matrix.arch }}.exe
+          node scripts/verify-windows-package.mjs --arch ${{ matrix.arch }} --portable $portable.FullName
       - uses: actions/upload-artifact@v4
         with:
-          name: LingoLeaf-windows-x64
-          path: release/win-unpacked/
+          name: LingoLeaf-windows-${{ matrix.arch }}
+          path: release/LingoLeaf-*-${{ matrix.arch }}.exe
+          if-no-files-found: error

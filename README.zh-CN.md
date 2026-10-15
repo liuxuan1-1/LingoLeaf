@@ -56,11 +56,18 @@
 
 ## 获取与开发
 
-当前版本：**v0.5.1 预览版**。从 [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases) 下载 Windows x64 免安装程序，启动后先配置自己的模型接口。升级时请先从托盘完全退出旧版，再运行新版。
+当前版本：**v0.5.1 预览版**。从 [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases/tag/v0.5.1) 选择适合自己 Windows 设备的免安装程序，启动后先配置自己的模型接口。
+
+| 下载 | 适用设备 | 支持的 Windows |
+| --- | --- | --- |
+| [LingoLeaf-0.5.1-x64.exe](https://github.com/liuxuan1-1/LingoLeaf/releases/download/v0.5.1/LingoLeaf-0.5.1-x64.exe) | Intel / AMD 64 位电脑 | Windows 10 / 11 |
+| [LingoLeaf-0.5.1-arm64.exe](https://github.com/liuxuan1-1/LingoLeaf/releases/download/v0.5.1/LingoLeaf-0.5.1-arm64.exe) | ARM64 电脑，例如骁龙笔记本、Surface Pro X | Windows 11 |
+
+不确定设备架构时，可在 Windows「设置 → 系统 → 系统信息 → 系统类型」查看。两个版本在同一 Windows 用户下使用相同的设置、密钥和学习记录。升级或切换架构前，请先从托盘完全退出正在运行的版本。
 
 [![Windows checks](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml)
 
-Windows 10 / 11，x64。原生桥使用系统自带的 Windows PowerShell 5.1、.NET Framework 和 UI Automation，无需另装 .NET SDK。桌面框架为 Electron，界面为 React + TypeScript。
+原生桥使用 Windows PowerShell 5.1、.NET Framework 和 UI Automation，无需另装 .NET SDK。桌面框架为 Electron，界面为 React + TypeScript。
 
 从源码开发需安装 Node.js 22 或更新版本：
 
@@ -77,7 +84,9 @@ npm run build
 npm run package
 ```
 
-生成的 Windows 可执行文件在 `release/`。目前构建不包含代码签名。发布前应自行签名，并在目标 Windows 环境检查安全提示。不要提交运行数据或密钥。
+`npm run package` 会在 `release/` 生成 x64 和 ARM64 两种免安装程序。只需一种架构时，使用 `npm run package:x64` 或 `npm run package:arm64`。`npm run package:dir` 会生成两种架构的未封装应用目录。
+
+目前构建不包含代码签名。发布前应自行签名，并在目标 Windows 环境检查安全提示。不要提交运行数据或密钥。
 
 ## 外观与阅读
 
