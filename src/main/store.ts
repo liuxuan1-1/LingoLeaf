@@ -4,12 +4,13 @@ import path from 'node:path';
 import { z } from 'zod';
 import { analysisSchema, PROVIDER_DEFAULTS } from './providers';
 import { initialReview, scheduleReview } from '../shared/scheduler';
-import type { Analysis, AppearanceSettings, ConversationTurn, Entry, Mode, Rating, Settings, UiLanguage } from '../shared/types';
+import type { Analysis, AppearanceSettings, ConversationTurn, Entry, GrammarTone, Mode, Rating, Settings, UiLanguage } from '../shared/types';
 
 export const DEFAULT_SETTINGS: Settings = {
   uiLanguage: 'zh-CN',
   provider: 'openai',
   requestProtocol: 'auto',
+  reasoningEffort: 'default',
   endpoint: PROVIDER_DEFAULTS.openai.endpoint,
   model: PROVIDER_DEFAULTS.openai.model,
   apiKey: '',
@@ -39,6 +40,7 @@ const settingsSchema = z
     uiLanguage: z.enum(['zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'es']).default('zh-CN'),
     provider: z.enum(['openai', 'anthropic', 'azure', 'ollama', 'compatible']),
     requestProtocol: z.enum(['auto', 'chat-completions', 'responses']).default('auto'),
+    reasoningEffort: z.enum(['default', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).default('default'),
     endpoint: z.string().max(2000),
     model: z.string().max(200),
     apiKey: z.string().max(16000),
@@ -128,10 +130,13 @@ function conversationFilename(entry: Entry, turn: ConversationTurn): string {
   return `${entry.id}-${turn.id}.md`;
 }
 const modeLabels: Record<Mode, string> = {
-  grammar: '语法学习', translate: '翻译学习', read: '阅读解析', express: '表达探索',
+  grammar: '语法学习', translate: '翻译学习', read: '阅读解析', express: '表达探索', reply: '回复检查',
 };
 const recallPrompts: Record<Mode, string> = {
-  grammar: '判断语法并尝试修改', translate: '说出译文', read: '解释句意和句子结构', express: '试着说出你想表达的意思',
+  grammar: '判断语法并尝试修改', translate: '说出译文', read: '解释句意和句子结构', express: '试着说出你想表达的意思', reply: '判断回复是否回应了对方的问题',
+};
+const grammarToneLabels: Record<GrammarTone, string> = {
+  professional: '专业 / 正式表达', spoken: '自然口语', casual: '轻松随意', formal: '正式书面表达', neutral: '中性自然表达',
 };
 function renderConversation(turns: ConversationTurn[]): string {
   return turns.map((turn, index) =>
@@ -161,16 +166,23 @@ export function renderEntryMarkdown(entry: Entry): string {
     `- 创建时间：${entry.createdAt}\n- 原文语言：${plain(entry.sourceLanguage)}\n- 目标语言：${plain(entry.targetLanguage)}\n- 学习主题：${entry.tags.map(plain).join(' · ') || '日常表达'}\n\n` +
     (entry.expressionContext ? `## 表达场景\n\n${quote(entry.expressionContext)}\n\n` : '') +
     (entry.expressionTone ? `## 表达语气\n\n${quote(entry.expressionTone)}\n\n` : '') +
+    (entry.mode === 'reply' && entry.grammarTone ? `## 表达语气\n\n${grammarToneLabels[entry.grammarTone]}\n\n` : '') +
     `## 先回忆\n\n阅读原句，先自己${recallPrompts[entry.mode]}，再看下面的答案。\n\n` +
-    `## 原句\n\n${literal(entry.original)}\n\n## ${entry.mode === 'grammar' ? '正确表达' : entry.mode === 'express' ? '建议表达' : '译文'}\n\n${literal(entry.corrected)}\n\n` +
+    `## 原句\n\n${literal(entry.original)}\n\n## ${entry.mode === 'grammar' ? '正确表达' : entry.mode === 'reply' ? '建议回复' : entry.mode === 'express' ? '建议表达' : '译文'}\n\n${literal(entry.corrected)}\n\n` +
+    (entry.mode === 'reply' && entry.replyReview
+      ? `## 对方的问题\n\n${literal(entry.replyReview.question)}\n\n## 你的回复\n\n${literal(entry.replyReview.reply)}\n\n` +
+        `## 回复评估 · ${{ appropriate: '回复合适', 'needs-work': '可以改进', unclear: '需要补充上下文' }[entry.replyReview.verdict]}\n\n${quote(entry.replyReview.explanation)}\n\n` +
+        (entry.replyReview.uncertainty ? `### 需要确认\n\n${quote(entry.replyReview.uncertainty)}\n\n` : '') +
+        (entry.replyReview.points.length ? `### 回复要点\n\n${entry.replyReview.points.map((point) => `- ${plain(point).replace(/\r?\n/g, '\n  ')}`).join('\n')}\n\n` : '')
+      : '') +
     (entry.mode === 'grammar' && entry.translation
       ? `## 译文${entry.translationLanguage ? ` · ${plain(entry.translationLanguage)}` : ''}\n\n${literal(entry.translation)}\n\n`
       : '') +
     (entry.mode === 'grammar' && entry.professional
-      ? `## 专业 / 正式表达\n\n${literal(entry.professional.text)}\n\n${quote(entry.professional.explanation)}\n\n` +
+      ? `## ${grammarToneLabels[entry.grammarTone ?? 'professional']}\n\n${literal(entry.professional.text)}\n\n${quote(entry.professional.explanation)}\n\n` +
         `### 写作提升要点\n\n${entry.professional.improvements.map((point) => `- ${plain(point).replace(/\r?\n/g, '\n  ')}`).join('\n')}\n\n`
       : '') +
-    `## 理解原因\n\n${quote(entry.explanation)}\n\n${entry.mode === 'grammar' ? `## 逐项解析\n\n${issueText}\n\n` : ''}` +
+    `## 理解原因\n\n${quote(entry.explanation)}\n\n${entry.mode === 'grammar' || entry.mode === 'reply' ? `## 逐项解析\n\n${issueText}\n\n` : ''}` +
     (entry.grammarPoints?.length ? `## 语法结构\n\n${entry.grammarPoints.map((point, index) => `### ${index + 1}\n\n${literal(point.text)}\n\n${quote(point.explanation)}`).join('\n\n')}\n\n` : '') +
     (entry.keyPoints?.length ? `## 要点摘要\n\n${entry.keyPoints.map((point) => `- ${plain(point).replace(/\r?\n/g, '\n  ')}`).join('\n')}\n\n` : '') +
     (entry.alternatives?.length ? `## 其他表达\n\n${entry.alternatives.map((alternative, index) => `### ${index + 1}. ${plain(alternative.tone)}\n\n${literal(alternative.text)}\n\n${quote(alternative.explanation)}`).join('\n\n')}\n\n` : '') +
@@ -397,7 +409,11 @@ export class LibraryStore {
       const validated = analysisSchema.safeParse(analysis);
       if (!validated.success) throw new Error('学习内容格式无效，未写入学习库。');
       const content = validated.data;
+      if (content.mode === 'reply' && (!content.replyReview || content.replyReview.verdict === 'unclear'))
+        throw new Error('图片内容尚未确认，请补充清晰的对话和回复后再保存。');
       if (content.mode !== 'grammar') delete content.professional;
+      if (content.mode !== 'grammar' && content.mode !== 'reply') delete content.grammarTone;
+      if (content.mode !== 'reply') delete content.replyReview;
       if (content.mode === 'grammar' && content.translation) {
         content.translationLanguage = settings.explanationLanguage.trim() || '简体中文';
       } else if (content.mode === 'read') {

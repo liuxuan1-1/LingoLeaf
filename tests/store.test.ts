@@ -41,6 +41,102 @@ afterEach(async () => {
   await fs.rm(directory, { recursive: true, force: true });
 });
 
+describe('effort, grammar tone and screenshot review storage', () => {
+  it('persists effort while preserving credentials, and rolls back failed writes', async () => {
+    const store = makeStore();
+    await store.init();
+    await store.saveSettings({ ...store.getSettings(), apiKey: 'kept-secret', reasoningEffort: 'high' });
+    const restarted = makeStore();
+    await restarted.init();
+    expect(restarted.getProviderSettings()).toMatchObject({ apiKey: 'kept-secret', reasoningEffort: 'high' });
+    const before = await fs.readFile(path.join(directory, 'settings.json'), 'utf8');
+    vi.spyOn(fs, 'rename').mockRejectedValueOnce(new Error('write unavailable'));
+    await expect(restarted.saveSettings({ ...restarted.getSettings(), reasoningEffort: 'low', apiKey: 'replacement' })).rejects.toThrow('write unavailable');
+    expect(restarted.getProviderSettings()).toMatchObject({ apiKey: 'kept-secret', reasoningEffort: 'high' });
+    expect(await fs.readFile(path.join(directory, 'settings.json'), 'utf8')).toBe(before);
+    await expect(restarted.saveSettings({ ...restarted.getSettings(), reasoningEffort: 'unsupported' as never })).rejects.toThrow('设置格式');
+  });
+  it('preserves a selected spoken tone across restart and labels the exported wording correctly', async () => {
+    const store = makeStore();
+    await store.init();
+    const spoken = await store.add({ ...analysis, grammarTone: 'spoken', professional: {
+      text: 'She goes to school.', explanation: 'A natural sentence to say aloud.', improvements: ['Keep it simple.'],
+    } }, store.getSettings());
+    const markdown = renderEntryMarkdown(spoken);
+    expect(markdown).toContain('## 自然口语');
+    expect(markdown).not.toContain('## 专业 / 正式表达');
+    const restarted = makeStore();
+    await restarted.init();
+    expect(restarted.list()).toEqual([spoken]);
+  });
+  it('stores recognized conversation text and review details without accepting image attachments', async () => {
+    const store = makeStore();
+    await store.init();
+    const reply: Analysis = {
+      ...analysis, mode: 'reply', original: 'Could you send the report today?\nI can send it at 4.',
+      corrected: 'I can send it by 4 p.m. today.', issues: [],
+      replyReview: { question: 'Could you send the report today?', reply: 'I can send it at 4.',
+        verdict: 'needs-work', explanation: 'Clarify the deadline.', points: ['Use by for a deadline.'], uncertainty: '<Confirm> the time zone.' },
+    };
+    const saved = await store.add(reply, { ...store.getSettings(), targetLanguage: 'English' });
+    expect(saved).toMatchObject({ mode: 'reply', sourceLanguage: 'Auto', targetLanguage: 'English', replyReview: reply.replyReview });
+    const markdown = renderEntryMarkdown(saved);
+    for (const text of ['## 对方的问题', '## 你的回复', '## 回复评估 · 可以改进', '### 需要确认', '&lt;Confirm&gt;', '### 回复要点', 'Use by for a deadline']) expect(markdown).toContain(text);
+    expect(markdown).not.toContain('data:image');
+    expect(markdown).not.toContain('<Confirm>');
+    const restarted = makeStore();
+    await restarted.init();
+    expect(restarted.list()).toEqual([saved]);
+    await expect(store.add({ ...reply, images: [{ mimeType: 'image/png', data: 'private-image-bytes' }] } as Analysis, store.getSettings())).rejects.toThrow('格式无效');
+    expect(await fs.readFile(path.join(directory, 'library.json'), 'utf8')).not.toContain('private-image-bytes');
+  });
+  it('does not create a learning note when the screenshot question or reply is unclear', async () => {
+    const store = makeStore();
+    await store.init();
+    await expect(store.add({ ...analysis, mode: 'reply', replyReview: {
+      question: '', reply: '', verdict: 'unclear', explanation: 'Unreadable.', points: ['Please upload a clearer crop.'], uncertainty: 'Cannot tell which message is yours.',
+    } }, store.getSettings())).rejects.toThrow('尚未确认');
+    expect(store.list()).toEqual([]);
+    expect(await fs.readdir(path.join(store.getLibraryDirectory(), 'entries'))).toEqual([]);
+  });
+  it.each(['spoken', 'formal'] as const)('keeps %s reply tone and anchored corrections in the saved learning record and Markdown', async (grammarTone) => {
+    const store = makeStore();
+    await store.init();
+    const reply: Analysis = {
+      ...analysis, mode: 'reply', grammarTone,
+      original: 'Could you send it today?\nI sends it at 4.',
+      corrected: 'I can send it by 4 p.m. today.',
+      professional: { text: 'A separate professional version.', explanation: 'Unused for reply mode.', improvements: ['This should not be saved.'] },
+      issues: [
+        { original: 'I sends', replacement: 'I send', kind: 'grammar', rule: 'Subject-verb agreement', explanation: 'Use the base verb with I.' },
+        { original: 'at 4', replacement: 'by 4 p.m. today', kind: 'style', rule: 'Deadline clarity', explanation: 'State a clear deadline.' },
+      ],
+      replyReview: { question: 'Could you send it today?', reply: 'I sends it at 4.', verdict: 'needs-work',
+        explanation: 'The reply needs a grammar correction and a clearer deadline.', points: ['Match I with send.'], uncertainty: '' },
+    };
+    const saved = await store.add(reply, store.getSettings());
+    expect(saved.grammarTone).toBe(grammarTone);
+    expect(saved).not.toHaveProperty('professional');
+    const restarted = makeStore();
+    await restarted.init();
+    expect(restarted.list()[0]).toEqual(saved);
+    const expectedTone = grammarTone === 'spoken' ? '自然口语' : '正式书面表达';
+    const rendered = renderEntryMarkdown(saved);
+    const notes = await fs.readdir(path.join(store.getLibraryDirectory(), 'entries'));
+    const mirrored = await fs.readFile(path.join(store.getLibraryDirectory(), 'entries', notes[0]), 'utf8');
+    for (const markdown of [rendered, mirrored]) {
+      expect(markdown).toContain(`## 表达语气\n\n${expectedTone}`);
+      expect(markdown).toContain('## 逐项解析');
+      expect(markdown).toContain('**原文片段**\n\n```text\nI sends\n```');
+      expect(markdown).toContain('**建议片段**\n\n```text\nI send\n```');
+      expect(markdown).toContain('Use the base verb with I');
+      expect(markdown).toContain('**原文片段**\n\n```text\nat 4\n```');
+      expect(markdown).toContain('**建议片段**\n\n```text\nby 4 p.m. today\n```');
+      expect(markdown).toContain('State a clear deadline');
+    }
+  });
+});
+
 describe('learning storage', () => {
   it('loads pre-protocol settings and preserves credentials and notes when selecting Responses', async () => {
     const original = makeStore();
@@ -58,11 +154,13 @@ describe('learning storage', () => {
     delete saved.settings.theme;
     delete saved.settings.fontSize;
     delete saved.settings.uiLanguage;
+    delete saved.settings.reasoningEffort;
     await fs.writeFile(configPath, JSON.stringify(saved));
 
     const migrated = makeStore();
     await migrated.init();
     expect(migrated.getSettings().requestProtocol).toBe('auto');
+    expect(migrated.getSettings().reasoningEffort).toBe('default');
     expect(migrated.getAppearance()).toEqual({ theme: 'forest', fontSize: 'large' });
     expect(migrated.getUiLanguage()).toBe('zh-CN');
     expect(migrated.getProviderSettings().apiKey).toBe('existing-key');

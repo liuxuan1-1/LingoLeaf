@@ -233,7 +233,7 @@ export function Library({
                 <div className="note-divider">
                   <ArrowRight size={14} />
                 </div>
-                <p className="note-corrected">{entry.corrected}</p>
+                <p className="note-corrected">{entry.replyReview?.verdict === 'unclear' ? t('信息不足，需要补充上下文。', 'More context is needed before this reply can be assessed.') : entry.corrected}</p>
                 <div className="tags">
                   {entry.tags.slice(0, 3).map((value) => (
                     <span className="tag neutral" key={value}>
@@ -297,7 +297,7 @@ export function Library({
             <button
               className="button secondary"
               onClick={() => {
-                onPractice(selected.original, selected.mode, { context: selected.expressionContext, tone: selected.expressionTone });
+                onPractice(selected.original, selected.mode, { context: selected.expressionContext, tone: selected.expressionTone, grammarTone: selected.grammarTone });
                 setSelected(null);
               }}
             >

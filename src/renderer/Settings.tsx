@@ -18,7 +18,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Provider, RequestProtocol, Settings, UiLanguage } from '../shared/types';
+import type { Provider, ReasoningEffort, RequestProtocol, Settings, UiLanguage } from '../shared/types';
 import { UI_LANGUAGES, type Translate } from '../shared/i18n';
 import { api, errorMessage } from './bridge';
 import { SectionHeading, Shortcut, Spinner, Toggle, type Notify } from './components';
@@ -186,7 +186,7 @@ export function SettingsPage({
     setDraft((current) => ({ ...current, [key]: value }));
     setDirty(true);
     if (
-      ['provider', 'endpoint', 'model', 'apiKey', 'azureApiVersion', 'requestProtocol'].includes(
+      ['provider', 'endpoint', 'model', 'apiKey', 'azureApiVersion', 'requestProtocol', 'reasoningEffort'].includes(
         key,
       )
     )
@@ -198,6 +198,7 @@ export function SettingsPage({
       ...current,
       provider,
       requestProtocol: 'auto',
+      reasoningEffort: 'default',
       endpoint: defaults.endpoint,
       model: defaults.model,
       apiKey: '',
@@ -365,6 +366,17 @@ export function SettingsPage({
                   />
                 </label>
               )}
+              <label className="form-field full">
+                <span>{t('推理强度', 'Reasoning effort')}</span>
+                <select value={draft.reasoningEffort || 'default'} disabled={draft.provider === 'anthropic' || draft.provider === 'ollama'}
+                  onChange={(event) => field('reasoningEffort', event.target.value as ReasoningEffort)}>
+                  <option value="default">{t('默认（由模型服务决定）', 'Default (provider decides)')}</option>
+                  {(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const).map((value) => <option value={value} key={value}>{value}</option>)}
+                </select>
+                <small>{draft.provider === 'anthropic' || draft.provider === 'ollama'
+                  ? t('此版本暂不支持为 Anthropic 或 Ollama 设置推理强度。', 'This version does not configure reasoning effort for Anthropic or Ollama.')
+                  : t('可用值取决于接口和模型；默认不发送此参数。不支持所选值时，请改回默认。', 'Supported values depend on the endpoint and model. Default omits this parameter. If a value is unsupported, choose Default.')}</small>
+              </label>
               <label className="form-field full">
                 <span>
                   {t("API 密钥", "API key")}
@@ -587,7 +599,7 @@ export function SettingsPage({
               <br />
               {t("笔记也是。", "your notes.")}
             </h3>
-            <p>{t("仅在你主动分析文字或继续追问时，内容才会发送到配置的模型接口。", "Text is sent to your configured model only when you request analysis or ask a follow-up.")}</p>
+            <p>{t('仅在你主动分析或发送追问时，文字与所选图片才会发送到配置的模型接口。', 'Text and selected images are sent to your configured model only when you request analysis or send a follow-up.')}</p>
             <div>
               <ShieldCheck size={17} />
               <span>{t("API 密钥由系统加密", "API keys encrypted by your system")}</span>

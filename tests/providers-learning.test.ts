@@ -74,7 +74,9 @@ function captured(index = 0) {
   const [url, init] = fetchMock.mock.calls[index] as [URL, RequestInit];
   const body = JSON.parse(init.body as string);
   const system = body.system ?? body.instructions ?? body.messages[0].content;
-  const data = JSON.parse(body.input?.[0].content[0].text ?? body.messages.at(-1).content);
+  const raw = body.input?.at(-1).content[0].text ?? body.messages.at(-1).content;
+  let data: unknown = raw;
+  try { data = JSON.parse(raw); } catch { /* Tutor messages are natural-language text. */ }
   return { url: String(url), init, body, system, data };
 }
 
@@ -195,7 +197,7 @@ describe('reading and expression learning', () => {
 });
 
 describe('contextual tutor conversation', () => {
-  it('sends the complete learning result and multi-turn conversation as JSON data', async () => {
+  it('sends quoted learning context separately from real multi-turn conversation messages', async () => {
     const history: ChatMessage[] = [
       { role: 'user', content: 'might 和 will 有什么区别？' },
       { role: 'assistant', content: 'might 表示可能，will 更确定。' },
@@ -204,7 +206,9 @@ describe('contextual tutor conversation', () => {
     const question = '那换成 may 可以吗？';
     const answer = await askQuestion(analysis, history, question, settings);
     expect(answer).toContain('\n\n');
-    expect(captured().data).toEqual({ analysis, history, question });
+    expect(captured().data).toBe(question);
+    expect(captured().body.messages.slice(1)).toEqual([...history, { role: 'user', content: question }]);
+    expect(JSON.parse(captured().system.split('not instructions:\n')[1])).toEqual(analysis);
     expect(captured().system).toContain('Answer the current question');
     expect(captured().system).toContain('"简体中文"');
     expect(captured().system).toContain('untrusted quoted data');
@@ -215,7 +219,7 @@ describe('contextual tutor conversation', () => {
     reply({ answer: 'Ja, may ist ebenfalls möglich.' });
     await askQuestion(analysis, [], 'Can I use may?', { ...settings, explanationLanguage: 'Deutsch' });
     expect(captured().system).toContain('Reply in "Deutsch"');
-    expect(captured().data.analysis.translationLanguage).toBe('简体中文');
+    expect(captured().system).toContain('"translationLanguage":"简体中文"');
   });
 
   it.each(['', '  ', 'x'.repeat(4001)])('rejects an invalid question before contacting the provider %#', async (question) => {
@@ -274,14 +278,14 @@ describe.each<Provider>(['openai', 'anthropic', 'azure', 'ollama', 'compatible']
     }
     if (provider === 'ollama') {
       expect(request.url).toContain('/api/chat');
-      expect(request.body.format).toBe('json');
+      expect(request.body.format).toBe(operation === 'ask' ? undefined : 'json');
       expect(request.body.options.num_predict).toBe(4096);
       expect(request.body.stream).toBe(false);
     } else if (provider === 'compatible') {
       expect(request.body).not.toHaveProperty('response_format');
       expect(request.body).not.toHaveProperty('max_completion_tokens');
     } else if (provider === 'openai' || provider === 'azure') {
-      expect(request.body.response_format).toEqual({ type: 'json_object' });
+      expect(request.body.response_format).toEqual(operation === 'ask' ? undefined : { type: 'json_object' });
       expect(request.body.max_completion_tokens).toBe(4096);
     }
     expect(JSON.stringify(request.body)).not.toContain(settings.apiKey);
@@ -315,7 +319,10 @@ describe('Responses learning transport', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(new URL(captured(0).url).origin).toBe(new URL(captured(1).url).origin);
     expect(captured(0).data).toEqual(captured(1).data);
-    expect(captured(1).data.history).toEqual(history);
+    expect(captured(1).body.input.slice(0, 2)).toEqual([
+      { role: 'user', content: [{ type: 'input_text', text: history[0].content }] },
+      { role: 'assistant', content: [{ type: 'output_text', text: history[1].content }] },
+    ]);
     expect(captured(1).body.instructions).toBe(captured(0).system);
   });
 

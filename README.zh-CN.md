@@ -26,7 +26,7 @@
 
 | 模式 | 输入 | 获得的内容 |
 | --- | --- | --- |
-| 修改英文 | 英语句子 | 最少改动的语法修正、句意翻译，以及独立的正式／专业表达、改写说明和学习要点 |
+| 修改英文 | 英语句子、口语稿，或对话截图 | 选择语气检查文本，或结合截图里的提问检查自己的回复 |
 | 读懂外语 | 目标语言的文本，例如英文 | 翻译成讲解语言，按原文片段解析语法结构，并总结学习要点 |
 | 表达想法 | 完整原文或零散想法 | 在同一页面选择「已有完整原文」进行忠实翻译，或选择「只有大致想法」，补充场景和语气，获得推荐、备选及必要的澄清问题 |
 
@@ -36,15 +36,25 @@
 
 即使语法正确，也会单独给出可选的正式／专业表达，并解释具体措辞和可复用要点。它有独立的复制按钮，不影响语法判断；应用语法修正时仍使用最少改动的纠正文本。旧笔记可继续阅读，重新分析可生成包含专业表达的新笔记。
 
+检查文本时可以选择 **专业、口语／演讲、轻松随意、正式、中性**。修改口语稿时选择「口语／演讲」，会得到适合自然说出来的表达。最少改动的语法修正与按语气改写的版本分别显示。
+
+### 用图片检查回复
+
+在「修改英文 → 检查截图里的回复」粘贴截图，或点击「添加图片」。例如 Teams 中对方的问题和自己的回答，可以放在同一张或多张截图里；也可补充哪一句是自己的回复，或输入准备发送的草稿。结果会列出识别出的提问、回复、是否答题、语法与语气建议，以及需要确认的内容。看不清文字或无法确定发言人时，会请求补充上下文，不保存不明确的判断。
+
+需要模型和接口均支持图片输入。支持 PNG、JPEG、WebP，最多 4 张，单张 5 MiB、合计 12 MiB，每边不超过 8192 像素、总像素不超过 2400 万。点击提交后才发送图片；学习库与 Markdown 保存识别出的文字和点评，**不保存原图**。当前图片也可以随追问发送；以后重新打开笔记时，如需参考原图，请重新添加。
+
 ![专业表达独立展示改写、原因及学习要点](docs/images/professional-writing-en-dark.png)
 
 结果、学习库笔记、复习答案和划词弹窗中均可展开追问，询问解释或继续调整表达。追问使用当前配置的模型，发送这条结果、你的问题及近期对话。每条结果最多追问 20 轮；完整历史会保存，发给模型的历史按完整问答保留最近最多 48,000 个字符。
 
 已收藏条目的追问会写入桌面学习库和独立 Markdown 对话笔记，也可在手机端阅读。若设置不收藏语法完全正确的句子，这类未收藏结果的对话仅临时保留，不写入学习库。每次追问会额外调用一次模型；表达建议和追问结果不会自动替换其他应用的文字。
 
+追问支持模型的自然语言回答，也兼容旧接口的回答包装格式。回答已生成但保存失败时，仍显示答案并保留完整上下文，明确提示后续对话为临时状态。切换任务、关闭结果或重新分析会清空临时对话，请复制需要保留的内容。首页最近笔记按钮会滚回练习输入区，「打开笔记文件夹」也会显示成功或失败反馈。
+
 ## 获取与开发
 
-当前版本：**v0.4.0 预览版**。从 [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases) 下载 Windows x64 免安装程序，启动后先配置自己的模型接口。升级时请先从托盘完全退出旧版，再运行新版。
+当前版本：**v0.5.0 预览版**。从 [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases) 下载 Windows x64 免安装程序，启动后先配置自己的模型接口。升级时请先从托盘完全退出旧版，再运行新版。
 
 [![Windows checks](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml)
 
@@ -97,6 +107,10 @@ npm run package
 OpenAI 和 OpenAI 兼容接口支持 **Chat Completions / Responses**，可在「请求协议」中选择「自动」或手动指定。服务商要求 Responses 时，选择 Responses 并填写 Base URL，也可直接填写以 `/responses` 结尾的完整接口地址，例如 `https://example.com/v1/responses`。Responses 支持 JSON 和 SSE 返回。
 
 Anthropic 使用 Messages，Ollama 使用原生 `/api/chat`，Azure OpenAI 使用部署式 Chat Completions 接口。
+
+OpenAI、OpenAI 兼容接口与 Azure OpenAI 可以设置 **推理强度（Reasoning effort）**。「默认」不发送该参数；其余可选 `none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`。具体支持哪些值取决于模型和接口，不支持时请改回默认。较高强度可能增加耗时与用量。本版 Anthropic 与原生 Ollama 使用默认值。追问和图片请求也使用已保存的推理设置；图片或启用推理的请求最多等待 120 秒，普通文本仍为 60 秒。
+
+请求格式参考 [OpenAI 推理说明](https://developers.openai.com/api/docs/guides/reasoning) 与 [图片输入文档](https://developers.openai.com/api/docs/guides/images-vision)。图片还支持 [Anthropic Messages](https://platform.claude.com/docs/en/build-with-claude/vision) 和 [Ollama vision](https://docs.ollama.com/capabilities/vision) 原生接口，实际能力取决于配置的模型。
 
 模型必须能遵循 JSON 输出指令。填写所选服务要求的 API Key；无需认证的本地兼容接口或 Ollama 可以留空。模型权限和计费由用户自己的账户决定，软件没有内置共享 API Key。
 

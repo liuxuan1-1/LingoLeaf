@@ -3,21 +3,23 @@ import {
   Leaf, MessageCircle, MousePointer2, Sparkles, WandSparkles, X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { AnalysisResult, ExpressionOptions, Mode, Settings } from '../shared/types';
+import type { AnalysisResult, ExpressionOptions, GrammarTone, ImageInput, Mode, Settings } from '../shared/types';
 import { api, errorMessage } from './bridge';
 import { ResultView, Shortcut, Spinner, type Notify } from './components';
 import { useI18n } from './i18n';
+import { ImageAttachments, useImageInput } from './Images';
+import { getGrammarTones } from './modes';
 
-type Draft = { text: string; context: string; tone: string; result: AnalysisResult | null; error: string };
+type Draft = { text: string; context: string; tone: string; grammarTone: GrammarTone; images: ImageInput[]; resultImages: ImageInput[]; result: AnalysisResult | null; error: string };
 type PracticeInitial = { text: string; mode: Mode; key: number; options?: ExpressionOptions } | null;
 type Task = 'grammar' | 'read' | 'express';
 const TASKS: Task[] = ['grammar', 'read', 'express'];
 const EXPRESSION_MODES = ['translate', 'express'] as const;
-const emptyDraft = (): Draft => ({ text: '', context: '', tone: '', result: null, error: '' });
+const emptyDraft = (): Draft => ({ text: '', context: '', tone: '', grammarTone: 'professional', images: [], resultImages: [], result: null, error: '' });
 const initialDraft = (initial: NonNullable<PracticeInitial>): Draft => ({
-  ...emptyDraft(), text: initial.text, context: initial.options?.context || '', tone: initial.options?.tone || '',
+  ...emptyDraft(), text: initial.text, context: initial.options?.context || '', tone: initial.options?.tone || '', grammarTone: initial.options?.grammarTone || 'professional', images: initial.options?.images || [],
 });
-const taskForMode = (mode: Mode): Task => mode === 'translate' ? 'express' : mode;
+const taskForMode = (mode: Mode): Task => mode === 'translate' ? 'express' : mode === 'reply' ? 'grammar' : mode;
 
 export function Workbench({ settings, notify, onSettings, initial, onDone, syncError }: {
   settings: Settings;
@@ -30,19 +32,36 @@ export function Workbench({ settings, notify, onSettings, initial, onDone, syncE
   const { language, t } = useI18n();
   const [mode, setMode] = useState<Mode>(initial?.mode || 'grammar');
   const [expressionMode, setExpressionMode] = useState<'translate' | 'express'>(initial?.mode === 'express' ? 'express' : 'translate');
+  const [writingMode, setWritingMode] = useState<'grammar' | 'reply'>(initial?.mode === 'reply' ? 'reply' : 'grammar');
   const [drafts, setDrafts] = useState<Record<Mode, Draft>>(() => {
-    const values = { grammar: emptyDraft(), translate: emptyDraft(), read: emptyDraft(), express: emptyDraft() };
+    const values = { grammar: emptyDraft(), translate: emptyDraft(), read: emptyDraft(), express: emptyDraft(), reply: emptyDraft() };
     if (initial) values[initial.mode] = initialDraft(initial);
     return values;
   });
   const [busy, setBusy] = useState(false);
   const request = useRef(0);
   const submitting = useRef(false);
-  const { text, context, tone, result, error } = drafts[mode];
+  const { text, context, tone, grammarTone, images, resultImages, result, error } = drafts[mode];
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
   const task = taskForMode(mode);
   const updateDraft = (patch: Partial<Draft>, value: Mode = mode) => {
     setDrafts((all) => ({ ...all, [value]: { ...all[value], ...patch } }));
   };
+  const imageInput = useImageInput({
+    images: mode === 'grammar' ? drafts.reply.images : images,
+    scope: `${mode}-${initial?.key || 0}`,
+    disabled: busy,
+    onError: (message) => updateDraft({ error: message }),
+    onChange: (next) => {
+      if (mode === 'grammar') {
+        setDrafts((all) => ({ ...all, reply: { ...all.reply, images: next, grammarTone,
+          text: [all.reply.text, text].filter(Boolean).filter((value, index, list) => list.indexOf(value) === index).join('\n\n'), result: null, error: '' } }));
+        setMode('reply'); setWritingMode('reply');
+      } else updateDraft({ images: next, result: null, error: '' });
+    },
+  });
+  const blocked = busy || imageInput.reading;
   useEffect(() => () => { request.current += 1; }, []);
   useEffect(() => {
     if (initial) {
@@ -51,25 +70,31 @@ export function Workbench({ settings, notify, onSettings, initial, onDone, syncE
       setDrafts((all) => ({ ...all, [initial.mode]: initialDraft(initial) }));
       setMode(initial.mode);
       if (initial.mode === 'translate' || initial.mode === 'express') setExpressionMode(initial.mode);
+      if (initial.mode === 'grammar' || initial.mode === 'reply') setWritingMode(initial.mode);
       setBusy(false);
+      composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      inputRef.current?.focus({ preventScroll: true });
     }
   }, [initial]);
   const changeMode = (value: Mode) => {
-    if (submitting.current) return;
+    if (submitting.current || imageInput.reading) return;
     setMode(value);
     if (value === 'translate' || value === 'express') setExpressionMode(value);
+    if (value === 'grammar' || value === 'reply') setWritingMode(value);
   };
-  const selectTask = (value: Task) => changeMode(value === 'express' ? expressionMode : value);
+  const selectTask = (value: Task) => changeMode(value === 'express' ? expressionMode : value === 'grammar' ? writingMode : value);
   const analyze = async () => {
-    if (!text.trim() || submitting.current) return;
+    if ((mode === 'reply' ? !images.length : !text.trim()) || submitting.current || imageInput.reading) return;
     const id = ++request.current;
     const submittedMode = mode;
     submitting.current = true;
     setBusy(true);
     updateDraft({ error: '', result: null }, submittedMode);
     try {
-      const response = await api.analyze(text, submittedMode, submittedMode === 'express' ? { context, tone } : undefined);
-      if (id === request.current) updateDraft({ result: response }, submittedMode);
+      const options = submittedMode === 'express' ? { context, tone } : submittedMode === 'grammar' ? { grammarTone }
+        : submittedMode === 'reply' ? { grammarTone, images } : undefined;
+      const response = await api.analyze(text, submittedMode, options);
+      if (id === request.current) updateDraft({ result: response, resultImages: submittedMode === 'reply' ? images : [] }, submittedMode);
       await onDone();
     } catch (e) {
       if (id === request.current) updateDraft({ error: errorMessage(e) }, submittedMode);
@@ -80,7 +105,7 @@ export function Workbench({ settings, notify, onSettings, initial, onDone, syncE
   const tasks = {
     grammar: {
       title: t('修改英文', 'Improve English'),
-      description: t('修正语法，学习更正式、专业的写法。', 'Fix grammar and learn a more professional style.'),
+      description: t('修正语法、调整语气，或检查截图里的回复。', 'Fix grammar, adjust tone, or review a reply in a screenshot.'),
       icon: WandSparkles,
     },
     read: {
@@ -101,10 +126,16 @@ export function Workbench({ settings, notify, onSettings, initial, onDone, syncE
   const copy = {
     grammar: {
       label: t('想改进哪一段英文？', 'What would you like to improve?'), direction: t('英语', 'English'),
-      help: t('先修正语法，再单独提供更正式／专业的表达，帮助你理解两者的区别。', 'Get a grammar correction and a separate professional rewrite, with explanations of each.'),
+      help: t('先修正语法，再按所选语气优化表达。也可以直接粘贴截图，检查你是否回答得当。', 'Get a grammar correction and a separate rewrite in your chosen tone. You can also paste a screenshot to review your reply.'),
       placeholder: t('例如：She go to school every day.', 'For example: She go to school every day.'),
       samples: ['She go to school every day.', 'I am agree with you.'],
       action: t('检查并改进', 'Check and improve'), loading: t('从语法正确，到表达得体。', 'From correct grammar to effective writing.'),
+    },
+    reply: {
+      label: t('补充说明或输入你的回复', 'Add context or type your reply'), direction: t('截图回复检查', 'Screenshot reply review'),
+      help: t('粘贴包含对方问题与自己回复的截图，检查是否答题、语气是否得体。需要支持图片的模型。', 'Paste a screenshot of their question and your reply to check relevance and tone. Requires a vision-capable model.'),
+      placeholder: t('可留空；也可以说明哪条是我的回复，或输入准备发送的回答。', 'Optional: identify your reply in the screenshot or type the answer you plan to send.'),
+      samples: [], action: t('检查我的回复', 'Review my reply'), loading: t('结合上下文，看看回复是否合适。', 'Checking your reply in context.'),
     },
     translate: {
       label: t('输入要翻译的完整原文', 'Enter the text to translate'), direction: `→ ${settings.targetLanguage}`,
@@ -139,7 +170,7 @@ export function Workbench({ settings, notify, onSettings, initial, onDone, syncE
             const item = tasks[value], Icon = item.icon;
             return <button key={value} id={`task-${value}`} role="tab" aria-selected={task === value}
               aria-controls="practice-panel" tabIndex={task === value ? 0 : -1}
-              className={`practice-task ${task === value ? 'selected' : ''}`} disabled={busy}
+              className={`practice-task ${task === value ? 'selected' : ''}`} disabled={blocked}
               onClick={() => selectTask(value)} onKeyDown={(event) => {
                 const next = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? (index + 1) % TASKS.length
                   : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? (index + TASKS.length - 1) % TASKS.length
@@ -154,13 +185,30 @@ export function Workbench({ settings, notify, onSettings, initial, onDone, syncE
           })}
         </div>
       </div>
-      <div className="card composer" id="practice-panel" role="tabpanel" aria-labelledby={`task-${task}`}>
+      <div ref={composerRef} className="card composer" id="practice-panel" role="tabpanel" aria-labelledby={`task-${task}`}
+        onPaste={task === 'grammar' ? imageInput.onPaste : undefined}>
+        {task === 'grammar' && <div className="expression-switch">
+          <h3 id="writing-choice-label">{t('你想检查什么？', 'What would you like to check?')}</h3>
+          <div className="expression-choices" role="radiogroup" aria-labelledby="writing-choice-label">
+            {(['grammar', 'reply'] as const).map((value, index) => <button key={value} id={`writing-${value}`} role="radio" aria-checked={mode === value}
+              tabIndex={mode === value ? 0 : -1} className={`expression-choice ${mode === value ? 'selected' : ''}`} disabled={blocked}
+              onClick={() => changeMode(value)} onKeyDown={(event) => {
+                const next = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(event.key) ? 1 - index : event.key === 'Home' ? 0 : event.key === 'End' ? 1 : null;
+                if (next === null) return;
+                event.preventDefault(); const target = next ? 'reply' : 'grammar'; changeMode(target); document.getElementById(`writing-${target}`)?.focus();
+              }}>
+              <span className="expression-choice-indicator" aria-hidden="true">{mode === value && <CheckCircle2 size={18} />}</span>
+              <span><strong>{value === 'grammar' ? t('检查文本', 'Check text') : t('检查截图里的回复', 'Review a screenshot reply')}</strong>
+                <small>{value === 'grammar' ? t('语法修正与语气优化。', 'Grammar corrections and tone improvements.') : t('结合对方的问题，检查你的回答。', 'Review your answer alongside their question.')}</small></span>
+            </button>)}
+          </div>
+        </div>}
         {task === 'express' && <div className="expression-switch">
           <h3 id="expression-choice-label">{t('你现在准备好了什么？', 'What are you starting with?')}</h3>
           <div className="expression-choices" role="radiogroup" aria-labelledby="expression-choice-label">
             {EXPRESSION_MODES.map((value, index) => <button key={value} id={`expression-${value}`} role="radio"
               aria-checked={mode === value} tabIndex={mode === value ? 0 : -1}
-              className={`expression-choice ${mode === value ? 'selected' : ''}`} disabled={busy}
+              className={`expression-choice ${mode === value ? 'selected' : ''}`} disabled={blocked}
               onClick={() => changeMode(value)} onKeyDown={(event) => {
                 const next = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(event.key) ? 1 - index
                   : event.key === 'Home' ? 0 : event.key === 'End' ? 1 : null;
@@ -178,7 +226,7 @@ export function Workbench({ settings, notify, onSettings, initial, onDone, syncE
         </div>
         <p className="mode-help" id="mode-help">{current.help}</p>
         <div className="textarea-shell">
-          <textarea id="sentence-input" spellCheck={false} value={text} maxLength={12000} disabled={busy}
+          <textarea ref={inputRef} id="sentence-input" spellCheck={false} value={text} maxLength={12000} disabled={blocked}
             placeholder={current.placeholder} aria-describedby="mode-help"
             onChange={(event) => updateDraft({ text: event.target.value, result: null, error: '' })}
             onKeyDown={(event) => {
@@ -191,6 +239,18 @@ export function Workbench({ settings, notify, onSettings, initial, onDone, syncE
             <span>{text.length.toLocaleString(language)} / {Number(12000).toLocaleString(language)}</span>
           </div>
         </div>
+        {mode === 'reply' && <>
+          <ImageAttachments images={images} addFiles={imageInput.addFiles} reading={imageInput.reading} disabled={busy}
+            onRemove={(index) => updateDraft({ images: images.filter((_, i) => i !== index), result: null, error: '' })} />
+          <p className="mode-help">{t('图片只用于本次分析；笔记仅保存识别出的文字与点评，不保存原图。', 'Images are used only for this analysis. Notes save recognized text and feedback, not the original images.')}</p>
+        </>}
+        {task === 'grammar' && <label className="form-field grammar-tone">
+          <span>{t('希望的语气', 'Preferred tone')}</span>
+          <select value={grammarTone} disabled={blocked} onChange={(event) => updateDraft({ grammarTone: event.target.value as GrammarTone, result: null, error: '' })}>
+            {Object.entries(getGrammarTones(t)).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+          </select>
+          <small>{t('语法修正保留原意；语气改写单独展示。', 'Grammar corrections preserve your meaning; tone rewrites are shown separately.')}</small>
+        </label>}
         {mode === 'express' && <div className="expression-options">
           <label className="form-field"><span>{t('场景与对象', 'Context and audience')} <small>{t('可选', 'Optional')}</small></span>
             <textarea value={context} maxLength={2000} rows={2} disabled={busy}
@@ -203,13 +263,13 @@ export function Workbench({ settings, notify, onSettings, initial, onDone, syncE
               onChange={(event) => updateDraft({ tone: event.target.value, result: null, error: '' })} />
           </label>
         </div>}
-        <div className="sample-row"><span>{t('试试示例', 'Try an example')}</span>
+        {!!current.samples.length && <div className="sample-row"><span>{t('试试示例', 'Try an example')}</span>
           {current.samples.map((sample) => <button key={sample} disabled={busy}
             onClick={() => updateDraft({ text: sample, result: null, error: '' })}>{sample}<ArrowRight size={12} /></button>)}
-        </div>
+        </div>}
         <div className="composer-bottom">
-          <span className="privacy-caption"><Leaf size={13} />{t('只发送你主动提交的文字', 'Only text you submit is sent')}</span>
-          <button className="button primary" disabled={busy || !text.trim()} onClick={() => void analyze()} title="Ctrl + Enter">
+          <span className="privacy-caption"><Leaf size={13} />{t('只发送你主动提交的文字与图片', 'Only text and images you submit are sent')}</span>
+          <button className="button primary" disabled={blocked || (mode === 'reply' ? !images.length : !text.trim())} onClick={() => void analyze()} title="Ctrl + Enter">
             {busy ? <Spinner label={t('正在细读你的句子…', 'Reading your text…')} /> : <><Sparkles size={17} />{current.action}<span className="button-enter"><CornerDownLeft size={12} /></span></>}
           </button>
         </div>
@@ -228,9 +288,9 @@ export function Workbench({ settings, notify, onSettings, initial, onDone, syncE
           <div className="insight-head"><span className="eyebrow">{t('你的语言笔记', 'YOUR LANGUAGE NOTE')}</span>
             <button className="icon-button" aria-label={t('清空结果', 'Clear result')} onClick={() => updateDraft({ result: null })}><X size={16} /></button>
           </div>
-            <ResultView key={mode} result={result} entryId={result.entryId} notify={notify} compact />
+            <ResultView key={mode} result={result} entryId={result.entryId} contextImages={resultImages} notify={notify} compact />
           <div className="saved-note"><BookOpenCheck size={15} />
-            {!result.entryId ? t('语法正确的句子未自动收藏，可在设置中开启。', 'Grammatically correct sentences are not saved automatically. You can enable this in Settings.')
+            {!result.entryId ? result.mode === 'grammar' && result.isCorrect ? t('语法正确的句子未自动收藏，可在设置中开启。', 'Grammatically correct sentences are not saved automatically. You can enable this in Settings.') : t('这条结果未保存到学习库。', 'This result has not been saved to your library.')
               : syncError ? t('已保存到学习库；Markdown 同步需要处理，请查看顶部提示。', 'Saved to your library. Markdown sync needs attention; see the notice above.')
               : t('已整理到学习库与 Markdown 笔记。', 'Saved to your library and Markdown notes.')}
           </div>

@@ -35,7 +35,7 @@ describe('desktop interface language', () => {
   it('offers all six UI languages separately from learning languages and localizes settings', () => {
     const html = render(<SettingsPage settings={settings} initialDraft={null} onDraft={noop}
       shortcuts={{ grammar: false, translate: false }} notify={noop} onSaved={noop} refresh={done} />);
-    for (const label of ['Interface language', 'Model connection', 'Translation target language', 'Explanation language', 'Test connection', 'Save settings']) {
+    for (const label of ['Interface language', 'Model connection', 'Reasoning effort', 'Default (provider decides)', 'Translation target language', 'Explanation language', 'Test connection', 'Save settings']) {
       expect(html).toContain(label);
     }
     for (const value of ['zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'es']) expect(html).toContain(`value="${value}"`);
@@ -45,6 +45,13 @@ describe('desktop interface language', () => {
     // Native language names and the learning-language input are deliberate content.
     const withoutLanguages = html.replace(/<option\b[^>]*>[\s\S]*?<\/option>/g, '').replace(/(?:value|placeholder)="[^"<>]*"/g, '');
     expect(withoutLanguages).not.toMatch(/[\p{Script=Han}]/u);
+  });
+
+  it.each(['anthropic', 'ollama'] as const)('disables unsupported reasoning-effort configuration for %s', (provider) => {
+    const html = render(<SettingsPage settings={{ ...settings, provider }} initialDraft={null} onDraft={noop}
+      shortcuts={{ grammar: false, translate: false }} notify={noop} onSaved={noop} refresh={done} />);
+    expect(html).toContain('This version does not configure reasoning effort for Anthropic or Ollama.');
+    expect(html).toMatch(/Reasoning effort<\/span><select disabled="">/);
   });
 
   it('localizes all appearance labels without changing the English sample sentence', () => {

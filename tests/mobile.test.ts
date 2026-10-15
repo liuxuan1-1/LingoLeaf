@@ -549,6 +549,32 @@ async function renderPhone(language: UiLanguage, items: Entry[]) {
 }
 
 describe('localized mobile UI and professional writing', () => {
+  it('renders and searches screenshot review text while escaping every model-provided field', async () => {
+    const hostile = '<img src=x onerror=alert(1)>';
+    const reply: Entry = { ...entry, mode: 'reply', corrected: 'I can send it by Friday.', replyReview: {
+      question: `question-token ${hostile}`, reply: `reply-token ${hostile}`, verdict: 'needs-work',
+      explanation: `explanation-token ${hostile}`, points: [`takeaway-token ${hostile}`], uncertainty: `uncertainty-token ${hostile}`,
+    } };
+    const phone = await renderPhone('en', [reply]);
+    expect(phone.element('review').innerHTML).toContain('Check whether the reply fits');
+    phone.element('reveal').onclick();
+    const html = phone.element('review').innerHTML;
+    for (const label of ['Suggested reply', 'Their question', 'Your reply', 'Needs improvement', 'What needs confirmation', 'Reply takeaways']) expect(html).toContain(label);
+    expect(html).not.toContain('<img');
+    for (const query of ['question-token', 'reply-token', 'explanation-token', 'takeaway-token', 'uncertainty-token']) {
+      expect(html).toContain(`${query} &lt;img src=x onerror=alert(1)&gt;`);
+      phone.element('search').value = query;
+      phone.element('search').oninput();
+      expect(phone.element('items').innerHTML).toContain(reply.original);
+    }
+  });
+  it('labels spoken grammar rewrites using the saved tone', async () => {
+    const spoken: Entry = { ...entry, grammarTone: 'spoken', professional: { text: 'She goes to school.', explanation: 'Simple spoken wording.', improvements: ['Say it naturally.'] } };
+    const phone = await renderPhone('en', [spoken]);
+    phone.element('reveal').onclick();
+    expect(phone.element('review').innerHTML).toContain('Natural spoken wording');
+    expect(phone.element('review').innerHTML).not.toContain('Professional / formal wording');
+  });
   it('renders and searches professional wording as literal text without rewriting saved learning content', async () => {
     const formal: Entry = { ...entry, professional: {
       text: 'She attends school.\n\n  <img src=x onerror=alert(1)>',

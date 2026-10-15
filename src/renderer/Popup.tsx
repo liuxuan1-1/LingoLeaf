@@ -25,6 +25,7 @@ export function Popup() {
     translate: t("正在寻找恰当的译文…", "Finding the right translation…"),
     read: t("正在翻译并拆解语法…", "Translating and unpacking the grammar…"),
     express: t("正在组织你的想法…", "Putting your ideas into words…"),
+    reply: t('正在检查截图里的回复…', 'Reviewing the reply in your screenshot…'),
   } satisfies Record<Mode, string>;
   useEffect(
     () =>
@@ -119,7 +120,7 @@ export function Popup() {
           {t("回到学习空间", "Back to your learning space")}
         </button>
         <div>
-          {event.status === 'done' && event.result && (
+          {event.status === 'done' && event.result && event.result.replyReview?.verdict !== 'unclear' && (
             <button
               className="button secondary small"
               onClick={async () => {

@@ -119,7 +119,7 @@ describe('learning result presentation', () => {
   });
 });
 
-describe('three-task practice and four-mode library', () => {
+describe('three-task practice and five-mode library', () => {
   it('exposes three explicit tasks with a single selected, focusable task', () => {
     const html = renderToStaticMarkup(<Workbench settings={settings} notify={() => {}} onSettings={() => {}} initial={null} onDone={async () => {}} />);
     for (const task of ['grammar', 'read', 'express']) {
@@ -128,7 +128,7 @@ describe('three-task practice and four-mode library', () => {
     for (const label of ['修改英文', '读懂外语', '表达想法']) expect(html).toContain(label);
     expect((html.match(/role="tab"/g) || []).length).toBe(3);
     expect((html.match(/aria-selected="true"/g) || []).length).toBe(1);
-    expect((html.match(/tabindex="-1"/g) || []).length).toBe(2);
+    expect((html.match(/aria-selected="false" aria-controls="practice-panel" tabindex="-1"/g) || []).length).toBe(2);
     expect(html).toContain('role="tabpanel"');
     expect(html).toContain('aria-labelledby="task-grammar"');
     expect(html).not.toContain('id="task-translate"');
@@ -183,11 +183,45 @@ describe('three-task practice and four-mode library', () => {
     expect(html).not.toContain('找到语法问题');
   });
 
-  it('keeps all four underlying modes and formats dates in the chosen locale', () => {
-    expect(MODES).toEqual(['grammar', 'translate', 'read', 'express']);
+  it('keeps all five underlying modes and formats dates in the chosen locale', () => {
+    expect(MODES).toEqual(['grammar', 'translate', 'read', 'express', 'reply']);
     expect(getModeInfo('en').translate.label).toBe('Translate a text');
     expect(getModeInfo('en').express.label).toBe('Shape an idea');
     expect(getModeInfo('en').grammar.note).toBe('Grammar note');
     expect(formatDate('2026-09-20T12:00:00Z', 'es')).toBe(new Date('2026-09-20T12:00:00Z').toLocaleDateString('es', { month: 'short', day: 'numeric' }));
+  });
+
+  it('offers screenshot review inside writing and retains the selected tone when practicing again', () => {
+    const html = renderToStaticMarkup(<LanguageProvider initialLanguage="en"><Workbench settings={settings} notify={() => {}} onSettings={() => {}}
+      initial={{ mode: 'reply', text: 'The blue bubble is my reply.', key: 2, options: { grammarTone: 'spoken' } }} onDone={async () => {}} /></LanguageProvider>);
+    expect((html.match(/role="tab"/g) || []).length).toBe(3);
+    expect(html).toContain('aria-labelledby="task-grammar"');
+    expect(html).toContain('id="writing-reply" role="radio" aria-checked="true"');
+    expect(html).toContain('<option value="spoken" selected="">Spoken / presentation</option>');
+    expect(html).toContain('The blue bubble is my reply.');
+    expect(html).toContain('Requires a vision-capable model.');
+    expect(html).toContain('Notes save recognized text and feedback, not the original images.');
+  });
+
+  it('labels spoken rewrites distinctly while retaining a separate minimal grammar correction', () => {
+    const html = renderToStaticMarkup(<LanguageProvider initialLanguage="en"><ResultView result={{ ...analysis, mode: 'grammar', grammarTone: 'spoken',
+      corrected: 'I agree with you.', professional: { text: 'Yeah, I agree.', explanation: 'A shorter spoken version.', improvements: ['A natural pause.'] } }} /></LanguageProvider>);
+    expect(html).toContain('Grammar correction');
+    expect(html).toContain('A more natural spoken version');
+    expect(html).toContain('Copy tone rewrite');
+    expect(html).not.toContain('Copy professional version');
+  });
+
+  it('shows screenshot context and verdict, without presenting an unclear placeholder as a reply', () => {
+    const result: Analysis = { ...analysis, mode: 'reply', corrected: 'SHOULD NOT BE COPIED', professional: { text: 'UNSUPPORTED SUGGESTION', explanation: '', improvements: [] },
+      replyReview: { question: 'Which deadline?', reply: '', verdict: 'unclear', explanation: 'The speaker is unclear.', points: ['Need another message.'], uncertainty: 'Identify your reply.' } };
+    const html = renderToStaticMarkup(<LanguageProvider initialLanguage="en"><ResultView result={result} /></LanguageProvider>);
+    for (const value of ['This reply needs more context', 'Their question', 'My reply', 'Which deadline?', 'Identify your reply.', 'Original images were not saved']) expect(html).toContain(value);
+    for (const value of ['SHOULD NOT BE COPIED', 'UNSUPPORTED SUGGESTION', 'Suggested reply', 'grammatically correct']) expect(html).not.toContain(value);
+  });
+
+  it('searches recognized conversation text and uncertainty in reply notes', () => {
+    const searchable = entrySearchText({ ...entry, mode: 'reply', replyReview: { question: 'Project Deadline?', reply: 'By Friday.', verdict: 'needs-work', explanation: 'Be precise.', points: ['Mention time zone.'], uncertainty: 'No date visible.' } });
+    for (const text of ['project deadline', 'by friday', 'be precise', 'mention time zone', 'no date visible']) expect(searchable).toContain(text);
   });
 });

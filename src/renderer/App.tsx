@@ -20,7 +20,7 @@ import {
   Sprout,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppState, Entry, ExpressionOptions, Mode, Settings } from '../shared/types';
 import { api, errorMessage, isPreview } from './bridge';
 import { Brand, EmptyState, SectionHeading, Shortcut, TitleBar, type Notify } from './components';
@@ -40,6 +40,9 @@ export function App() {
   const [page, setPage] = useState<Page>('workbench');
   const [toast, setToast] = useState<{ message: string; kind: string; id: number } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [openingFolder, setOpeningFolder] = useState(false);
+  const folderBusy = useRef(false);
+  const practiceSequence = useRef(0);
   const [initialText, setInitialText] = useState<{ text: string; mode: Mode; key: number; options?: ExpressionOptions } | null>(
     null,
   );
@@ -105,8 +108,17 @@ export function App() {
     }
   };
   const goPractice = (text?: string, mode: Mode = 'grammar', options?: ExpressionOptions) => {
-    if (text) setInitialText({ text, mode, key: Date.now(), options });
+    if (text !== undefined) setInitialText({ text, mode, key: ++practiceSequence.current, options });
     setPage('workbench');
+  };
+  const openNotesFolder = async () => {
+    if (folderBusy.current) return;
+    folderBusy.current = true; setOpeningFolder(true);
+    try {
+      await api.openLibrary();
+      notify(t('已请求打开笔记文件夹，请查看文件资源管理器。', 'Requested the notes folder. Check File Explorer.'));
+    } catch (e) { notify(errorMessage(e), 'error'); }
+    finally { folderBusy.current = false; setOpeningFolder(false); }
   };
   if (!state)
     return (
@@ -343,7 +355,7 @@ export function App() {
                         <button
                           className="recent-card"
                           key={entry.id}
-                          onClick={() => goPractice(entry.original, entry.mode, { context: entry.expressionContext, tone: entry.expressionTone })}
+                          onClick={() => goPractice(entry.original, entry.mode, { context: entry.expressionContext, tone: entry.expressionTone, grammarTone: entry.grammarTone })}
                         >
                           <div>
                             <span className={`tag ${entry.mode === 'translate' ? 'amber' : ''}`}>
@@ -351,7 +363,7 @@ export function App() {
                             </span>
                             <ArrowUpRight size={16} />
                           </div>
-                          <p>{entry.corrected}</p>
+                          <p>{entry.replyReview?.verdict === 'unclear' ? t('信息不足，需要补充上下文。', 'More context is needed before this reply can be assessed.') : entry.corrected}</p>
                           <small>{entry.tags.slice(0, 2).join(' · ') || t("日常表达", "Everyday expressions")}</small>
                         </button>
                       ))}
@@ -371,12 +383,10 @@ export function App() {
                 <footer className="page-footer">
                   <span>{t("点滴练习，长久进步。", "Small practice. Lasting progress.")}</span>
                   <button
-                    onClick={() =>
-                      void api.openLibrary().catch((e) => notify(errorMessage(e), 'error'))
-                    }
+                    disabled={openingFolder} onClick={() => void openNotesFolder()}
                   >
                     <FolderOpen size={14} />
-                    {t("打开笔记文件夹", "Open notes folder")}
+                    {openingFolder ? t('正在打开…', 'Opening…') : t("打开笔记文件夹", "Open notes folder")}
                   </button>
                 </footer>
               </>

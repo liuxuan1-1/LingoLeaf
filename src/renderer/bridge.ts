@@ -10,7 +10,7 @@ function currentUiLanguage() {
 
 export const isPreview = !window.lingo;
 const previewState: AppState = {
-  version: '0.4.0',
+  version: '0.5.0',
   entries: [],
   shortcuts: { grammar: false, translate: false },
   settings: {

@@ -24,7 +24,7 @@ The practice page has three task cards, with a clear selected border and checkma
 
 | Mode | What to enter | What you get |
 | --- | --- | --- |
-| Improve English (修改英文) | An English sentence | Minimal grammar corrections, a meaning translation, and a separate professional/formal version with explanations and reusable writing tips |
+| Improve English (修改英文) | An English sentence, a speaking script, or conversation screenshots | Choose text correction with a tone, or check your reply against the question shown in a screenshot |
 | Understand a text (读懂外语) | Text in your target language, such as English | A full translation into your explanation language, source-anchored grammar notes, and key points |
 | Express an idea (表达想法) | A complete source text or rough ideas | Choose **Translate a text** for a faithful translation, or **Shape an idea** for suggested wording, alternatives, context/tone controls, and clarification questions |
 
@@ -34,15 +34,25 @@ For English-to-Chinese reading, set Translation target language to **English** a
 
 Professional wording is an optional style improvement, even for grammatically correct input. It has its own copy button and explains what makes the wording more suitable for work or formal communication. The grammar verdict and minimal correction stay separate; applying a grammar correction uses that correction, not the professional version. Existing notes remain readable; analyze again to add a professional version to a new note.
 
+Choose **Professional, Spoken / presentation, Casual, Formal, or Neutral** when checking text. For a speaking script, choose **Spoken / presentation** to get wording that sounds natural aloud. The minimal grammar correction remains separate from the rewrite in your chosen tone.
+
+### Review a reply from an image
+
+Under **Improve English → Review a screenshot reply**, paste a screenshot or use **Add images**. Include the other person's question and your answer—for example, a Teams conversation. You can optionally identify which reply is yours or type a draft. The result shows the recognized question and reply, whether the answer addresses the question, grammar/tone feedback, an improved reply, and any uncertainty. If the text or speaker is unclear, LingoLeaf asks for context and does not save a misleading verdict.
+
+Use a model and endpoint that accept image inputs. PNG, JPEG and WebP are supported, up to four images, 5 MiB each and 12 MiB in total; dimensions are limited to 8192 pixels per side and 24 megapixels. Images are sent only when you submit. The library and Markdown save recognized text and feedback, **not the original images**. Current images can also be included in follow-ups; reattach them after reopening a saved note if needed.
+
 ![A separate professional rewrite with explanations and writing tips](docs/images/professional-writing-en-dark.png)
 
 Use the follow-up panel on a result, library note, review answer, or selection popup to ask about an explanation or refine an expression. The model receives that result, your question, and recent conversation turns using the same configured provider. Each result supports up to 20 question-and-answer turns. Long histories remain saved; only recent complete turns within a 48,000-character history budget are sent to the model.
 
 Follow-ups on saved learning entries are stored in the desktop library and separate Markdown conversation notes, and can be read on mobile. A grammatically correct sentence excluded by your save preference has a temporary conversation only; its follow-ups are not added to the library. Every new question is an additional model request. Model suggestions and clarifying questions never replace external text automatically.
 
+Follow-ups accept normal conversational answers as well as older compatible services' answer wrappers. If an answer is generated but cannot be saved, it remains visible with a warning and complete conversation context; continuing becomes temporary. Switching tasks, closing the result, or analyzing again clears temporary conversations, so copy anything you want to keep. Recent-note buttons scroll back to the practice input, and **Open notes folder** reports whether the request succeeded or failed.
+
 ## Download and development
 
-Current version: **v0.4.0 preview**. Download the portable Windows x64 executable from [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases), then configure your own model service after launching it. Exit an older running version from its tray menu before opening the new executable.
+Current version: **v0.5.0 preview**. Download the portable Windows x64 executable from [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases), then configure your own model service after launching it. Exit an older running version from its tray menu before opening the new executable.
 
 [![Windows checks](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml/badge.svg)](https://github.com/liuxuan1-1/LingoLeaf/actions/workflows/ci.yml)
 
@@ -93,6 +103,10 @@ Appearance changes take effect immediately and save independently. You do not ne
 OpenAI and OpenAI-compatible services support **Chat Completions / Responses**. In Request Protocol (请求协议), choose Auto or select a protocol explicitly. If your service requires Responses, select Responses and enter its base URL, or enter the full endpoint ending in `/responses`, such as `https://example.com/v1/responses`. Responses supports both JSON and SSE responses.
 
 Anthropic uses Messages, Ollama uses its native `/api/chat` endpoint, and Azure OpenAI uses deployment-based Chat Completions.
+
+**Reasoning effort** is configurable for OpenAI, OpenAI-compatible services, and Azure OpenAI. **Default** omits the setting; other choices are `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`. Supported values depend on the model and endpoint, so choose Default if your service rejects the setting. Higher effort can take longer and use more tokens. Anthropic and native Ollama use Default in this version. Follow-ups and image requests use the same saved setting. Image or reasoning requests allow 120 seconds; ordinary text requests retain the 60-second limit.
+
+Request formats follow [OpenAI reasoning documentation](https://developers.openai.com/api/docs/guides/reasoning) and [image input documentation](https://developers.openai.com/api/docs/guides/images-vision). Native image adapters also support [Anthropic Messages](https://platform.claude.com/docs/en/build-with-claude/vision) and [Ollama vision](https://docs.ollama.com/capabilities/vision), subject to the configured model's capabilities.
 
 Models must follow JSON output instructions. Enter the API key required by your chosen service; local compatible endpoints or Ollama instances that do not require authentication can leave it blank. Model access and billing are managed through your own provider account. LingoLeaf does not include a shared API key.
 

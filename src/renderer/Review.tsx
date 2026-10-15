@@ -35,6 +35,7 @@ export function ReviewPage({
     translate: { label: t('试着翻译为 {language}', 'Try translating into {language}', { language: current?.targetLanguage || '' }), hint: t("不急着看答案，先用目标语言完整表达一次。", "Before looking, try expressing the whole sentence in the target language.") },
     read: { label: t("回想句意、语法结构与要点", "Recall the meaning, structure and key points"), hint: t("这段话在说什么？试着解释句子结构，再总结它的要点。", "What does the text mean? Explain the structure and summarize its main points.") },
     express: { label: t("回想怎样自然地表达这个意思", "Recall a natural way to express this idea"), hint: t("结合原来的场景与语气，先组织一种自然的说法。", "Use the original context and tone to form a natural expression.") },
+    reply: { label: t('回想如何贴切地回复对方', 'Recall a suitable reply'), hint: t('对方问了什么？你的回答是否完整、语气是否得体？', 'What did they ask? Does your answer address it fully and use a suitable tone?') },
   } satisfies Record<Mode, { label: string; hint: string }>;
   const upcoming = [...entries]
     .filter((entry) => new Date(entry.review.dueAt).getTime() > Date.now())

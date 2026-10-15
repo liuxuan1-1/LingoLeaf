@@ -1,4 +1,19 @@
-export type Mode = 'grammar' | 'translate' | 'read' | 'express';
+export type Mode = 'grammar' | 'translate' | 'read' | 'express' | 'reply';
+export type ReasoningEffort = 'default' | 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type GrammarTone = 'professional' | 'spoken' | 'casual' | 'formal' | 'neutral';
+export interface ImageInput {
+  mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
+  data: string;
+  name?: string;
+}
+export interface ReplyReview {
+  question: string;
+  reply: string;
+  verdict: 'appropriate' | 'needs-work' | 'unclear';
+  explanation: string;
+  points: string[];
+  uncertainty: string;
+}
 export type UiLanguage = 'zh-CN' | 'zh-TW' | 'en' | 'ja' | 'ko' | 'es';
 export interface ProfessionalExpression {
   text: string;
@@ -8,6 +23,8 @@ export interface ProfessionalExpression {
 export interface ExpressionOptions {
   context?: string;
   tone?: string;
+  grammarTone?: GrammarTone;
+  images?: ImageInput[];
 }
 export interface GrammarPoint {
   text: string;
@@ -62,6 +79,8 @@ export interface Analysis {
   expressionContext?: string;
   expressionTone?: string;
   professional?: ProfessionalExpression;
+  grammarTone?: GrammarTone;
+  replyReview?: ReplyReview;
 }
 export interface AnalysisResult extends Analysis {
   entryId?: string;
@@ -71,11 +90,14 @@ export interface TutorRequest {
   entryId?: string;
   history: ChatMessage[];
   question: string;
+  images?: ImageInput[];
 }
 export interface TutorResponse {
   answer: string;
   entry?: Entry;
   syncError?: string | null;
+  saveError?: string;
+  temporaryConversation?: ConversationTurn[];
 }
 export interface Review {
   dueAt: string;
@@ -100,6 +122,7 @@ export interface Settings {
   provider: Provider;
   endpoint: string;
   requestProtocol?: RequestProtocol;
+  reasoningEffort?: ReasoningEffort;
   model: string;
   apiKey: string;
   hasApiKey: boolean;

@@ -19,6 +19,8 @@ import { z } from 'zod';
 import { LibraryStore, credentialScope, renderEntryMarkdown } from './store';
 import { analyzeText, testProvider } from './providers';
 import { TutorService } from './tutor';
+import { validateImages } from './images';
+import { openLibraryDirectory } from './library-directory';
 import { NativeService, type NativeCapture } from './native';
 import { MobileServer } from './mobile';
 import type { Analysis, Mode, ResultEvent, Settings } from '../shared/types';
@@ -55,11 +57,12 @@ const textInput = z
   .min(1, '请先选中或输入一句话。')
   .max(12000, '一次最多处理 12,000 个字符。')
   .refine((text) => text.trim().length > 0, '请先选中或输入一句话。');
-const modeInput = z.enum(['grammar', 'translate', 'read', 'express']);
+const modeInput = z.enum(['grammar', 'translate', 'read', 'express', 'reply']);
 const ratingInput = z.enum(['again', 'hard', 'good', 'easy']);
 const settingsInput = z.object({
   provider: z.enum(['openai', 'compatible', 'anthropic', 'azure', 'ollama']),
   requestProtocol: z.enum(['auto', 'chat-completions', 'responses']).default('auto'),
+  reasoningEffort: z.enum(['default', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).default('default'),
   endpoint: z.string().max(2048),
   model: z.string().max(200),
   apiKey: z.string().max(8192),
@@ -189,6 +192,7 @@ function errorText(error: unknown) {
   return error instanceof Error ? error.message : '操作失败，请重试。';
 }
 async function persist(result: Analysis, settings: Settings) {
+  if (result.mode === 'reply' && result.replyReview?.verdict === 'unclear') return undefined;
   if (
     result.mode !== 'grammar' ||
     !result.isCorrect ||
@@ -317,22 +321,36 @@ function setupIPC() {
   handle('result:get', () => localizedResult(latestResult));
   handle('analyze', async (value: unknown) => {
     const request = z.object({
-      text: textInput,
+      text: z.string().max(12000, '一次最多处理 12,000 个字符。'),
       mode: modeInput,
       options: z.object({
         context: z.string().trim().max(2000).optional(),
         tone: z.string().trim().max(200).optional(),
+        grammarTone: z.enum(['professional', 'spoken', 'casual', 'formal', 'neutral']).optional(),
+        images: z.unknown().optional(),
       }).strict().optional(),
     }).strict().parse(value);
+    const images = validateImages(request.options?.images);
+    if (request.mode === 'reply') {
+      if (!images.length) throw new Error('请先粘贴或选择包含对话和你的回复的图片。');
+    } else {
+      textInput.parse(request.text);
+      if (images.length) throw new Error('图片请在「回复检查」中使用，或在结果下方追问时添加。');
+    }
+    const options = { ...request.options, images };
     const requestSettings = store.getProviderSettings();
-    const result = await analyzeText(request.text, request.mode, requestSettings, request.options);
+    const result = await analyzeText(request.text, request.mode, requestSettings, options);
     const entryId = await persist(result, requestSettings);
     return { ...result, entryId };
   });
   handle('tutor:ask', async (value: unknown) => {
     const response = await tutor.ask(value);
     if (response.entry) broadcast();
-    return { ...response, syncError: response.syncError ? statusText(response.syncError) : response.syncError };
+    return {
+      ...response,
+      syncError: response.syncError ? statusText(response.syncError) : response.syncError,
+      saveError: response.saveError ? statusText(response.saveError) : undefined,
+    };
   });
   handle('settings:save', async (value: unknown) => {
     const settings = settingsInput.parse(value),
@@ -375,9 +393,7 @@ function setupIPC() {
     return result.canceled ? null : result.filePaths[0];
   });
   handle('library:open', async () => {
-    await fs.mkdir(store.getLibraryDirectory(), { recursive: true });
-    const error = await shell.openPath(store.getLibraryDirectory());
-    if (error) throw new Error(error);
+    await openLibraryDirectory(store.getLibraryDirectory(), shell.openPath);
   });
   handle('entry:review', async (value: unknown) => {
     const { id, rating } = z.object({ id: z.string().max(100), rating: ratingInput }).parse(value);
