@@ -56,12 +56,12 @@
 
 ## 获取与开发
 
-当前版本：**v0.5.1 预览版**。从 [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases/tag/v0.5.1) 选择适合自己 Windows 设备的免安装程序，启动后先配置自己的模型接口。
+当前版本：**v0.5.2 预览版**。从 [Releases](https://github.com/liuxuan1-1/LingoLeaf/releases/tag/v0.5.2) 选择适合自己 Windows 设备的免安装程序，启动后先配置自己的模型接口。
 
 | 下载 | 适用设备 | 支持的 Windows |
 | --- | --- | --- |
-| [LingoLeaf-0.5.1-x64.exe](https://github.com/liuxuan1-1/LingoLeaf/releases/download/v0.5.1/LingoLeaf-0.5.1-x64.exe) | Intel / AMD 64 位电脑 | Windows 10 / 11 |
-| [LingoLeaf-0.5.1-arm64.zip](https://github.com/liuxuan1-1/LingoLeaf/releases/download/v0.5.1/LingoLeaf-0.5.1-arm64.zip) | ARM64 电脑，例如骁龙笔记本、Surface Pro X | Windows 11 |
+| [LingoLeaf-0.5.2-x64.exe](https://github.com/liuxuan1-1/LingoLeaf/releases/download/v0.5.2/LingoLeaf-0.5.2-x64.exe) | Intel / AMD 64 位电脑 | Windows 10 / 11 |
+| [LingoLeaf-0.5.2-arm64.zip](https://github.com/liuxuan1-1/LingoLeaf/releases/download/v0.5.2/LingoLeaf-0.5.2-arm64.zip) | ARM64 电脑，例如骁龙笔记本、Surface Pro X | Windows 11 |
 
 x64 版直接运行下载的 `.exe`。ARM64 版请将 **整个 ZIP 解压** 到一个文件夹，再运行其中的 `LingoLeaf.exe`。请保留同目录下的其他文件，不要单独移动 EXE，否则应用无法启动。
 

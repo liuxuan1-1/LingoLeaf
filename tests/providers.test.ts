@@ -77,6 +77,19 @@ const config = (provider: Provider = 'openai'): Settings => ({
   model: 'test-model',
 });
 
+function mockResponseChunks(chunks: Iterable<Uint8Array>, headers: Record<string, string>) {
+  const iterator = chunks[Symbol.iterator]();
+  const cancel = vi.fn();
+  const pull = vi.fn((controller: ReadableStreamDefaultController<Uint8Array>) => {
+    const next = iterator.next();
+    if (next.done) controller.close();
+    else controller.enqueue(next.value);
+  });
+  const body = new ReadableStream<Uint8Array>({ pull, cancel }, { highWaterMark: 0 });
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { headers }));
+  return { fetch, cancel, pull };
+}
+
 beforeAll(async () => {
   server = createServer(async (request, response) => {
     let body = '';
@@ -377,8 +390,14 @@ describe('provider validation and safe errors', () => {
   it('rejects non-JSON protocol responses and oversized bodies', async () => {
     rawBody = '<html>Error proxy</html>';
     await expect(analyzeText('Hello.', 'grammar', config())).rejects.toThrow('JSON');
-    rawBody = 'a'.repeat(1_048_600);
+    rawBody = 'a'.repeat(8 * 1024 * 1024 + 1);
     await expect(analyzeText('Hello.', 'grammar', config())).rejects.toThrow('过大');
+  });
+  it('accepts a valid JSON envelope larger than the former 1 MiB limit', async () => {
+    payload = { ...envelope(incorrect), metadata: 'x'.repeat(2 * 1024 * 1024) };
+    const result = await analyzeText('She go to school every day.', 'grammar', config());
+    expect(result.corrected).toBe(incorrect.corrected);
+    expect(captured).toHaveLength(1);
   });
   it('aborts a stalled request after 60 seconds with an actionable timeout', async () => {
     vi.useFakeTimers();
@@ -687,19 +706,108 @@ describe('Responses JSON and SSE completion boundaries', () => {
       );
     },
   );
-  it('rejects malformed UTF-8, malformed events and oversized streams', async () => {
+  it('rejects malformed UTF-8 and malformed events', async () => {
     const cases: Reply[] = [
       {
         contentType: 'text/event-stream',
         chunks: [Buffer.from('data: "'), Buffer.from([0xff]), Buffer.from('"\n\n')],
       },
       { contentType: 'text/event-stream', raw: 'data: not-json\n\n' },
-      { contentType: 'text/event-stream', chunks: [Buffer.alloc(1_048_600, 'x')] },
     ];
     for (const reply of cases) {
       replies = [reply];
       await expect(analyzeText(good.corrected, 'grammar', responsesConfig())).rejects.toThrow();
     }
-    expect(captured).toHaveLength(3);
+    expect(captured).toHaveLength(2);
+  });
+
+  it('accepts more than 8 MiB of intermediate events and uses only the completed answer', async () => {
+    const intermediate = Buffer.from(sseEvent('response.reasoning_summary_text.delta', {
+      delta: 'x'.repeat(512 * 1024),
+    }));
+    const completed = Buffer.from(sseEvent('response.completed', { response: responsesEnvelope(good) }));
+    const mock = mockResponseChunks((function* () {
+      for (let i = 0; i < 18; i++) yield intermediate;
+      yield Buffer.from(sseEvent('response.output_text.delta', { delta: JSON.stringify(good) }));
+      yield Buffer.from(sseEvent('response.output_text.done', { text: JSON.stringify(good) }));
+      yield completed;
+    })(), { 'Content-Type': 'text/event-stream' });
+
+    const result = await analyzeText(good.corrected, 'grammar', responsesConfig());
+    expect(result.corrected).toBe(good.corrected);
+    expect(result.explanation).toBe(good.explanation);
+    expect(mock.fetch).toHaveBeenCalledTimes(1);
+    expect(mock.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts a completed SSE event larger than 1 MiB with reasoning metadata', async () => {
+    const response = responsesEnvelope(good);
+    const completed = sseEvent('response.completed', {
+      response: {
+        ...response,
+        output: [{ type: 'reasoning', encrypted_content: 'x'.repeat(2 * 1024 * 1024) }, ...response.output],
+      },
+    });
+    const mock = mockResponseChunks([Buffer.from(completed)], { 'Content-Type': 'text/event-stream' });
+
+    const result = await analyzeText(good.corrected, 'grammar', responsesConfig());
+    expect(result.corrected).toBe(good.corrected);
+    expect(mock.fetch).toHaveBeenCalledTimes(1);
+    expect(mock.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['complete', 'unterminated-line', 'multiline'] as const)(
+    'rejects a single SSE event above 8 MiB (%s) and cancels without retrying',
+    async (shape) => {
+      // The multiline fixture exceeds the byte limit while staying below it in JS characters.
+      const padding = shape === 'multiline' ? '汉'.repeat(128 * 1024) : 'x'.repeat(256 * 1024);
+      const chunks = (function* () {
+        if (shape === 'complete') {
+          yield Buffer.from(sseEvent('response.created', { padding: padding.repeat(33) }));
+        } else if (shape === 'unterminated-line') {
+          yield Buffer.from('data: {"type":"response.created","padding":"');
+          for (let i = 0; i < 33; i++) yield Buffer.from(padding);
+          yield Buffer.from('"}\n\n');
+        } else {
+          yield Buffer.from('data: {"type":"response.created","padding":[\n');
+          const line = Buffer.from(`data: ${JSON.stringify(padding)},\n`);
+          for (let i = 0; i < 33; i++) yield line;
+          yield Buffer.from('data: ""]}\n\n');
+        }
+        yield Buffer.from(sseEvent('response.completed', { response: responsesEnvelope(good) }));
+      })();
+      const mock = mockResponseChunks(chunks, { 'Content-Type': 'text/event-stream' });
+
+      await expect(analyzeText(good.corrected, 'grammar', responsesConfig())).rejects.toThrow('API 返回内容过大。');
+      expect(mock.fetch).toHaveBeenCalledTimes(1);
+      expect(mock.cancel).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('rejects more than 32 MiB of small SSE events before accepting a completed answer', async () => {
+    const intermediate = Buffer.from(sseEvent('response.output_text.delta', { delta: 'x'.repeat(512 * 1024) }));
+    const mock = mockResponseChunks((function* () {
+      for (let i = 0; i < 65; i++) yield intermediate;
+      yield Buffer.from(sseEvent('response.completed', { response: responsesEnvelope(good) }));
+    })(), { 'Content-Type': 'text/event-stream' });
+
+    await expect(analyzeText(good.corrected, 'grammar', responsesConfig())).rejects.toThrow('API 返回内容过大。');
+    expect(mock.fetch).toHaveBeenCalledTimes(1);
+    expect(mock.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['application/json', 8 * 1024 * 1024],
+    ['text/event-stream', 32 * 1024 * 1024],
+  ] as const)('rejects an oversized %s Content-Length without reading its body', async (contentType, limit) => {
+    const mock = mockResponseChunks([Buffer.from('unused')], {
+      'Content-Type': contentType,
+      'Content-Length': String(limit + 1),
+    });
+
+    await expect(analyzeText(good.corrected, 'grammar', responsesConfig())).rejects.toThrow('API 返回内容过大。');
+    expect(mock.pull).not.toHaveBeenCalled();
+    expect(mock.cancel).toHaveBeenCalledTimes(1);
+    expect(mock.fetch).toHaveBeenCalledTimes(1);
   });
 });

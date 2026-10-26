@@ -245,8 +245,13 @@ Always include a separate professional object, even when grammar is correct. Its
 }`;
 }
 
+// Streams repeat text across delta/done/completed events and carry metadata.
+// Allow more total traffic while keeping each buffered response/event bounded.
+const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+const MAX_RESPONSE_STREAM_BYTES = 32 * 1024 * 1024;
+
 async function limitedJson(response: Response): Promise<unknown> {
-  const limit = 1_048_576;
+  const limit = MAX_RESPONSE_BYTES;
   if (Number(response.headers.get('content-length')) > limit) {
     await response.body?.cancel();
     throw new ProviderError('API 返回内容过大。');
@@ -308,7 +313,7 @@ function responsesText(payload: unknown, completedEvent = false): string {
 }
 
 async function responsesStreamText(response: Response): Promise<string> {
-  const limit = 1_048_576;
+  const limit = MAX_RESPONSE_STREAM_BYTES;
   if (Number(response.headers.get('content-length')) > limit) {
     await response.body?.cancel();
     throw new ProviderError('API 返回内容过大。');
@@ -317,12 +322,14 @@ async function responsesStreamText(response: Response): Promise<string> {
   const reader = response.body.getReader();
   const decoder = new TextDecoder('utf-8', { fatal: true });
   let bytes = 0,
+    eventBytes = 0,
     pending = '',
     eventName = '';
   let data: string[] = [];
   const dispatch = (): string | undefined => {
     const name = eventName;
     eventName = '';
+    eventBytes = 0;
     if (!data.length) return undefined;
     const serialized = data.join('\n');
     data = [];
@@ -346,7 +353,9 @@ async function responsesStreamText(response: Response): Promise<string> {
     // The completed response is authoritative; never concatenate these copies.
     return undefined;
   };
-  const line = (value: string): string | undefined => {
+  const line = (value: string, newlineBytes = 0): string | undefined => {
+    eventBytes += Buffer.byteLength(value, 'utf8') + newlineBytes;
+    if (eventBytes > MAX_RESPONSE_BYTES) throw new ProviderError('API 返回内容过大。');
     if (!value) return dispatch();
     if (value.startsWith(':')) return undefined;
     const colon = value.indexOf(':');
@@ -364,7 +373,7 @@ async function responsesStreamText(response: Response): Promise<string> {
       const length = pending[index] === '\r' && pending[index + 1] === '\n' ? 2 : 1;
       const value = pending.slice(0, index);
       pending = pending.slice(index + length);
-      const result = line(value);
+      const result = line(value, length);
       if (result !== undefined) return result;
     }
     if (end) {
@@ -375,6 +384,9 @@ async function responsesStreamText(response: Response): Promise<string> {
       }
       return dispatch();
     }
+    // Include the unfinished line as well as earlier lines of this event.
+    if (eventBytes + Buffer.byteLength(pending, 'utf8') > MAX_RESPONSE_BYTES)
+      throw new ProviderError('API 返回内容过大。');
     return undefined;
   };
   try {
